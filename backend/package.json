@@ -27,10 +27,13 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/platform-socket.io": "^11.1.5",
     "@nestjs/websockets": "^11.1.5",
+    "@supabase/supabase-js": "^2.55.0",
     "dotenv": "^17.2.1",
     "langchain": "^0.3.30",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "socket.io": "^4.8.1",
+    "supabase": "^2.34.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

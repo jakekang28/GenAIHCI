@@ -467,6 +467,7 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
       
       // Broadcast voting session start to all room members
       const payload = {
+        roomId,
         votingSessionId,
         type,
         maxSelections,
@@ -539,6 +540,7 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
       });
       
       const progressPayload = {
+        roomId,
         type,
         totalVotes: voteCount,
         totalMembers: uniqueMembers.length,

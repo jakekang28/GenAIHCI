@@ -11,7 +11,8 @@ const VotingComponent = ({
   maxSelections = 1,
   onVotingComplete,
   onVotingStarted,
-  showDetailedOptions = false
+  showDetailedOptions = false,
+  onStartVotingClick
 }) => {
   const { socket } = useSession();
   
@@ -52,82 +53,100 @@ const VotingComponent = ({
     contributionsLength: activeContributions.length 
   });
     if (!socket) return;
-
+    const dedupeByAuthor = (items) => {
+     const map = new Map();
+     for (const c of items || []) {
+       const authorId =
+         c?.authorId || c?.userId || c?.socketId || c?.content?.authorId;
+       const key = authorId || c?.id || c?.socketId || Math.random();
+       map.set(key, c);
+     }
+     return Array.from(map.values());
+   };
     // Listen for voting events
     const handleVotingStarted = (data) => {
       console.log(`[VotingComponent] room:voting_started received:`, data);
       console.log(`🎯 [VotingComponent] Current type: ${type}, Event type: ${data.type}`);
-      if (data.type === type) {
-        console.log(`[VotingComponent] Voting started for our type (${type})`);
-        console.log(`[VotingComponent] Contributions in event:`, data.contributions);
-        
-        // Update contributions from the event if not using predefined options
-        if (!usingPredefinedOptions && data.contributions) {
-          console.log(`[VotingComponent] Updating active contributions from event`);
-          setActiveContributions(data.contributions);
-        }
-        
-        setVotingState('voting');
-        setVotingSessionId(data.votingSessionId);
-        setHasVoted(false);
-        setSelectedOptions([]);
-        setVoteProgress({ totalVotes: 0, totalMembers: 0 });
-        if (onVotingStarted) onVotingStarted(data);
-      } else {
-        console.log(`[VotingComponent] Voting started for different type: ${data.type} (expected: ${type})`);
+      
+      console.log(`[VotingComponent] Voting started for our type (${type})`);
+      console.log(`[VotingComponent] Contributions in event:`, data.contributions);
+      if (data?.type !== type) return;
+      if (data?.roomId && data.roomId !== roomId) return;
+      // Update contributions from the event if not using predefined options
+      if (!usingPredefinedOptions && data.contributions) {
+        console.log(`[VotingComponent] Updating active contributions from event`);
+        setActiveContributions(dedupeByAuthor(data.contributions));
       }
+      
+      setVotingState('voting');
+      setVotingSessionId(data.votingSessionId);
+      setHasVoted(false);
+      setSelectedOptions([]);
+      setVoteProgress({ totalVotes: 0, totalMembers: 0 });
+      if (onVotingStarted) onVotingStarted(data);
+       
     };
 
     const handleVoteProgress = (data) => {
       console.log(`[VotingComponent] room:vote_progress received:`, data);
-      if (data.type === type) {
-        console.log(`[VotingComponent] Progress for our voting type (${type})`);
-        setVoteProgress({
-          totalVotes: data.totalVotes,
-          totalMembers: data.totalMembers
-        });
-      } else {
-        console.log(`[VotingComponent] Progress for different voting type: ${data.type} (expected: ${type})`);
-      }
+      if (data?.type !== type) return;
+      if (data?.roomId && data.roomId !== roomId) return;
+      console.log(`[VotingComponent] Progress for our voting type (${type})`);
+      setVoteProgress({
+        totalVotes: data.totalVotes,
+        totalMembers: data.totalMembers
+      });
+      
     };
 
     const handleVotingComplete = (data) => {
-      if (data.type === type) {
-        setVotingState('results');
-        setResults(data.results);
-        if (onVotingComplete) {
-          if (maxSelections > 1) {
-            // For multiple selections, send top N results
-            const topResults = data.results
-              .sort((a, b) => b.vote_count - a.vote_count)
-              .slice(0, maxSelections)
-              .map(result => result.contribution);
-            onVotingComplete(topResults, data.results);
-          } else {
-            // For single selection, send the winner
-            onVotingComplete(data.winner, data.results);
-          }
+      if (data?.type !== type) return;
+      if (data?.roomId && data.roomId !== roomId) return;
+      if (data?.isTie) {
+        const res = data.results || [];
+        const total = res.reduce((s, r) => s + (r.vote_count || 0), 0);
+        const max = Math.max(0, ...res.map(r => r.vote_count || 0));
+        const tiedCount = res.filter(r => (r.vote_count || 0) === max).length;
+        setResults(res);
+        setTieMessage(`Tie detected! ${tiedCount} options tied with ${max} vote(s). Click Revote to try again.`);
+        setVotingState('tie');
+        return
+      }
+      setVotingState('results');
+      setResults(data.results || []);
+      if (onVotingComplete) {
+        if (maxSelections > 1) {
+          const topResults = (data.results || [])
+          .sort((a, b) => b.vote_count - a.vote_count)
+          .slice(0, maxSelections)
+          .map(r => r.contribution);
+          onVotingComplete(topResults, data.results || []);
+        } else {
+          onVotingComplete(data.winner, data.results || []);
         }
       }
     };
 
     const handleVotingTie = (data) => {
-      if (data.votingSessionId === votingSessionId) {
+        if (!data) return;
+        if (data?.roomId && data.roomId !== roomId) return;
+        if (data?.votingSessionId && data.votingSessionId !== votingSessionId) return;
         setVotingState('tie');
         setResults(data.results);
-        setTieMessage(`Tie detected! ${data.tiedContributions.length} options tied. Revoting in 3 seconds...`);
-      }
+        const tied = data.tiedContributions?.length ?? 0;
+        setTieMessage(`Tie detected! ${tied} options tied. Click Revote to try again.`);
     };
 
     const handleRevoteStarted = (data) => {
-      if (data.type === type) {
-        setVotingState('voting');
-        setVotingSessionId(data.votingSessionId);
-        setHasVoted(false);
-        setSelectedOptions([]);
-        setVoteProgress({ totalVotes: 0, totalMembers: 0 });
-        setTieMessage('');
-      }
+      if (data?.type !== type) return;
+      if (data?.roomId && data.roomId !== roomId) return;
+      setVotingState('voting');
+      setVotingSessionId(data.votingSessionId);
+      setHasVoted(false);
+      setSelectedOptions([]);
+      setVoteProgress({ totalVotes: 0, totalMembers: 0 });
+      setTieMessage('');
+      
     };
 
     socket.on('room:voting_started', handleVotingStarted);
@@ -143,29 +162,19 @@ const VotingComponent = ({
       socket.off('room:voting_tie', handleVotingTie);
       socket.off('room:revote_started', handleRevoteStarted);
     };
-  }, [socket, type, votingSessionId, onVotingComplete, onVotingStarted]);
+  }, [socket, type, roomId, votingSessionId, onVotingComplete, onVotingStarted]);
 
   const startVoting = () => {
-    console.log(`🎬 [VotingComponent] startVoting called:`, {
-      hasSocket: !!socket,
-      roomId,
-      type,
-      maxSelections
-    });
-    
-    if (socket && roomId) {
-      const payload = {
-        roomId,
-        type,
-        maxSelections
-      };
+    const payload = {roomId, type, maxSelections}
+    if(onStartVotingClick){
+      onStartVotingClick(payload)
+      return;
+    }
+    if(socket && roomId){
       console.log(`[VotingComponent] Emitting room:start_voting:`, payload);
       socket.emit('room:start_voting', payload);
-    } else {
-      console.log(`[VotingComponent] Cannot start voting:`, {
-        hasSocket: !!socket,
-        roomId
-      });
+    }else{
+      console.log(`[VotingComponent] Cannot start voting:`, { hasSocket: !!socket, roomId });
     }
   };
 
@@ -177,42 +186,33 @@ const VotingComponent = ({
       roomId,
       usingPredefinedOptions
     });
-    
-    if (selectedOptions.length > 0) {
-      if (usingPredefinedOptions) {
-        // For predefined options, handle voting locally
-        console.log(`[VotingComponent] Handling predefined options vote locally`);
-        setHasVoted(true);
-        
-        // For now, just select the first option (could implement more sophisticated voting later)
-        const winner = selectedOptions[0];
-        console.log(`[VotingComponent] Local voting complete, winner:`, winner);
-        
-        // Call completion callback
-        if (onVotingComplete) {
-          onVotingComplete(winner, selectedOptions);
-        }
-      } else if (socket && votingSessionId) {
-        // Submit votes for backend-tracked contributions
-        selectedOptions.forEach(option => {
-          console.log(`[VotingComponent] Submitting vote for option:`, option);
-          const votePayload = {
-            roomId,
-            type,
-            optionIds: [option.id || option.socketId || option]
-          };
-          console.log(`[VotingComponent] Emitting room:vote:`, votePayload);
-          socket.emit('room:vote', votePayload);
-        });
-        setHasVoted(true);
-        console.log(`[VotingComponent] Vote submitted to backend, hasVoted set to true`);
-      } else {
-        console.log(`[VotingComponent] Cannot submit vote:`, {
-          hasSocket: !!socket,
-          selectedOptionsLength: selectedOptions.length,
-          votingSessionId
-        });
+    if (selectedOptions.length === 0) return;
+    if (usingPredefinedOptions) {
+      // For predefined options, handle voting locally
+      console.log(`[VotingComponent] Handling predefined options vote locally`);
+      setHasVoted(true);
+      
+      // For now, just select the first option (could implement more sophisticated voting later)
+      const winner = selectedOptions[0];
+      console.log(`[VotingComponent] Local voting complete, winner:`, winner);
+      
+      // Call completion callback
+      if (onVotingComplete) {
+        onVotingComplete(winner, selectedOptions);
       }
+    } else if (socket && votingSessionId) {
+      // Submit votes for backend-tracked contributions
+      const optionIds = selectedOptions.map(opt => opt.id || opt.socketId || opt);
+      const votePayload = { roomId, type, optionIds };
+      console.log(`[VotingComponent] Emitting room:vote:`, votePayload);
+      socket.emit('room:vote', votePayload);
+      setHasVoted(true);
+    } else {
+      console.log(`[VotingComponent] Cannot submit vote:`, {
+        hasSocket: !!socket,
+        selectedOptionsLength: selectedOptions.length,
+        votingSessionId
+      });
     }
   };
 
@@ -420,8 +420,19 @@ const VotingComponent = ({
         }}>
           {tieMessage}
         </div>
-        
-        <div>
+        <button
+          onClick={()=>{
+            if(!socket) return
+            socket.emit('room:start_voting', { roomId, type, maxSelections });
+          }}
+          style={{
+            background : '#10b981', color: 'white', border: 'none',
+            padding: '12px 24px', borderRadius: 8, fontWeight: 600, cursor: 'pointer'
+          }}
+        >
+            Revote
+        </button>
+        <div style={{ marginTop: 16 }}>
           <h4 style={{ marginBottom: 12 }}>Results:</h4>
           {results.map((result, index) => (
             <div key={index} style={{ 

@@ -9,6 +9,56 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [contributions, setContributions] = useState([]);
   const [phase, setPhase] = useState('create'); // types:'create', 'voting', 'results'
+  //---Util Function for only leaving one POV per person---
+
+  const toArray = (x) => (Array.isArray(x) ? x : x ? [x] : []);
+  const normalize = (c) => {
+    const content = typeof c?.content === 'string' ? { statement: c.content } : (c?.content ?? {});
+    const userId  = c?.userId   ?? content?.userId;
+    const socketId= c?.socketId ?? content?.socketId ?? c?.socket_id; // 혹시 필드명이 다를 경우 대비
+    let authorId  = c?.authorId ?? content?.authorId ?? c?.user?.id ?? userId ?? socketId;
+
+    // 'me' 같은 placeholder 교정
+    if (authorId === 'me' && socket?.id) authorId = socket.id;
+
+    return {
+      id: c?.id,
+      userId,
+      socketId,
+      authorId,
+      userName: c?.userName ?? content?.userName ?? 'Team Member',
+      roomId: c?.roomId ?? sessionId,
+      type: c?.type ?? 'pov_statement',
+      content,
+      raw: c,
+    };
+  };
+
+  const upsertByIdentity = (prev, incomingRaw) => {
+    const incoming = incomingRaw.map(normalize);
+    const out = prev.map(normalize);
+
+    const samePerson = (a, b) => {
+      if (a.userId && b.userId && a.userId === b.userId) return true;
+      if (a.socketId && b.socketId && a.socketId === b.socketId) return true;
+      if (a.authorId && b.authorId && a.authorId === b.authorId) return true;
+      if (a.id && b.id && a.id === b.id) return true;
+      return false;
+    };
+
+    incoming.forEach((n) => {
+      const idx = out.findIndex((p) => samePerson(p, n));
+      if (idx >= 0) {
+        // 기존 값과 합치되, 새로 온 필드가 우선
+        out[idx] = { ...out[idx], ...n };
+      } else {
+        out.push(n);
+      }
+    });
+
+    return out;
+  };
+  //End util
 
   useEffect(() => {
     if (!socket) return;
@@ -16,43 +66,71 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
     // Listen for contributions from other members
     const handleContributions = (data) => {
       if (data.type === 'pov_statement') {
-        setContributions(data.contributions || []);
+        const incoming = toArray(data?.contributions?.length ? data.contributions : data);
+        setContributions((prev) => upsertByIdentity(prev, incoming));
       }
     };
-
+    const handleContributionAck = (ack) => {
+      if (!ack?.ok || !ack?.contribution) return;
+      setContributions((prev) => upsertByIdentity(prev, [ack.contribution]));
+    }
+    const handleVotingStarted = (data) => {
+    if (data?.roomId !== sessionId || data?.type !== 'pov_statement') return;
+    setPhase('voting');                 
+    if (data.contributions) {
+      setContributions(upsertByIdentity([], data.contributions));
+    }
+    };
     const handlePhaseChange = (data) => {
       if (data.stage) {
         setPhase(data.stage);
+        //only change mine
+        if (data.stage === 'create') {
+          setHasSubmitted(false);
+        }
       }
     };
-
+    socket.on('room:voting_started', handleVotingStarted);
     socket.on('room:contributions', handleContributions);
+    socket.on('room:contribution:ack', handleContributionAck);
     socket.on('room:stage', handlePhaseChange);
     socket.on('session:stage', handlePhaseChange); // Legacy support
 
     return () => {
+      socket.off('room:voting_started', handleVotingStarted);
       socket.off('room:contributions', handleContributions);
+      socket.off('room:contribution:ack', handleContributionAck);
       socket.off('room:stage', handlePhaseChange);
       socket.off('session:stage', handlePhaseChange);
     };
-  }, [socket]);
+  }, [socket, sessionId]);
 
   const submitPovStatement = () => {
-    if (!socket || !myPovStatement.trim()) return;
-
-    const contribution = {
+    if (!socket || !socket.id || !myPovStatement.trim()) return;
+    const me = members?.find((m) => m.socketId === socket.id);
+    const myUserId = me?.userId || undefined;
+    const myUserName = me?.userName || 'You';
+    const mine = {
       roomId: sessionId,
       type: 'pov_statement',
+      userId: myUserId,
+      socketId: socket.id,
+      userName: myUserName,                              
       content: {
         statement: myPovStatement.trim(),
-        needs: needs.filter(n => n.trim()),
-        insights: insights.filter(i => i.trim()),
-        context: 'POV statement based on team needs and insights'
+        needs: needs.filter((n) => n.trim()),
+        insights: insights.filter((i) => i.trim()),
+        context: 'POV statement based on team needs and insights',
+        userId: myUserId,
+        socketId: socket.id,
+        authorId: myUserId || socket.id,
+        userName: myUserName,          
       },
-      saveToDb: true
+      saveToDb: true,
     };
 
-    socket.emit('room:contribution:submit', contribution);
+    socket.emit('room:contribution:submit', mine);
+    setContributions((prev) => upsertByIdentity(prev, [mine]));
     setHasSubmitted(true);
   };
 
@@ -64,6 +142,7 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
 
   const startVoting = () => {
     if (!socket) return;
+    console.log('[client] emit room:start_voting', { sessionId, type: 'pov_statement', maxSelections: 1, socketId: socket.id });
     socket.emit('room:start_voting', {
       roomId: sessionId,
       type: 'pov_statement',
@@ -253,6 +332,9 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
           subtitle="Consider which statement best integrates the needs and insights while clearly framing the design challenge"
           maxSelections={1}
           onVotingComplete={handleVotingComplete}
+          onStartVotingClick={({ roomId, type, maxSelections }) => {
+          socket.emit('room:start_voting', { roomId, type, maxSelections });
+        }}
         />
       </div>
     </div>
