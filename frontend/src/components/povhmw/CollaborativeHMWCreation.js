@@ -9,15 +9,45 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [contributions, setContributions] = useState([]);
   const [phase, setPhase] = useState('create'); // types: 'create', 'voting', 'results'
-
+  //Util Functions
+  const normHmw = (c) => {
+    const content = typeof c?.content === 'string' ? { question: c.content } : (c?.content ?? {});
+    return {
+    ...c,
+    content,
+    userId: c?.userId ?? c?.content?.userId,
+    socketId: c?.socketId ?? c?.content?.socketId,
+    authorId: c?.authorId ?? c?.content?.authorId,
+    }
+  }
+  const hmwKey = (x) => {
+    const a = x.userId || x.authorId || x.socketId || 'u';
+    const id = x.id || x.socketId;
+    if (id) return id;
+    const ord = x.content?.order;
+    if (ord != null) return `${a}::ord:${ord}`;
+    const q = (x.content?.question || '').trim().toLowerCase();
+    return `${a}::q:${q}`;
+  }
+  const upsertHmwByStableId = (prev, incomingRaw) => {
+    const prevN = prev.map(normHmw);
+    const incN  = incomingRaw.map(normHmw);
+    const map = new Map(prevN.map((p) => [hmwKey(p), p]));
+    for (const n of incN) {
+      const k = hmwKey(n);
+      map.set(k, { ...(map.get(k) ?? {}), ...n });
+    }
+    return Array.from(map.values());
+  }
   useEffect(() => {
     if (!socket) return;
 
     // Listen for contributions from other members
     const handleContributions = (data) => {
-      if (data.type === 'hmw_question') {
-        setContributions(data.contributions || []);
-      }
+      if (data?.type !== 'hmw_question') return;
+      const incoming = Array.isArray(data?.contributions?.length ? data.contributions : data);
+      if (!incoming.length) return;
+      setContributions((prev) => upsertHmwByStableId(prev, incoming));
     };
 
     const handlePhaseChange = (data) => {
@@ -25,17 +55,32 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
         setPhase(data.stage);
       }
     };
-
+     const handleContributionAck = (ack) => {
+      if (!ack?.ok || !ack?.contribution) return;
+      setContributions((prev) => upsertHmwByStableId(prev, [ack.contribution]));
+    };
+    const handleVotingStarted = (data) => {
+      if (data?.type !== 'hmw_question') return;
+      if (data?.roomId && data.roomId !== sessionId) return;
+      setPhase('voting');
+      if (data?.contributions) {
+        setContributions(upsertHmwByStableId([], data.contributions));
+      }
+    };
+    socket.on('room:voting_started', handleVotingStarted);
     socket.on('room:contributions', handleContributions);
+    socket.on('room:contribution:ack', handleContributionAck);
     socket.on('room:stage', handlePhaseChange);
     socket.on('session:stage', handlePhaseChange); // Legacy support
 
     return () => {
+      socket.off('room:voting_started', handleVotingStarted);
       socket.off('room:contributions', handleContributions);
+      socket.off('room:contribution:ack', handleContributionAck);
       socket.off('room:stage', handlePhaseChange);
       socket.off('session:stage', handlePhaseChange);
     };
-  }, [socket]);
+  }, [socket, sessionId]);
 
   const updateHmwQuestion = (index, value) => {
     const newQuestions = [...myHmwQuestions];
@@ -48,24 +93,38 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
 
     const validQuestions = myHmwQuestions.filter(q => q.trim());
     if (validQuestions.length === 0) return;
-
+    const me = members?.find((m) => m.socketId === socket.id);
+    const myUserId = me?.userId || undefined;
+    const myUserName = me?.userName || 'You';
+    const baseMeta = {
+      roomId: sessionId,
+      type: 'hmw_question',
+      userId: myUserId,
+      socketId: socket.id,
+      authorId: myUserId || socket.id,
+      userName: myUserName,
+      saveToDb: true,
+    };
     // Submit each question as a separate contribution
     validQuestions.forEach((question, index) => {
       const contribution = {
-        roomId: sessionId,
-        type: 'hmw_question',
-        content: {
-          question: question.trim(),
+        ...baseMeta,
+        content :{
+          question: question,
           povStatement,
-          needs: needs.filter(n => n.trim()),
-          insights: insights.filter(i => i.trim()),
-          order: index + 1,
-          context: 'HMW question based on selected POV statement'
-        },
-        saveToDb: true
+          needs: needs.filter((n) => n.trim()),
+          insights: insights.filter((i) => i.trim()),
+          index,
+          context: 'HMW question based on selected POV statement',
+          userId: myUserId,
+          socketId: socket.id,
+          authorId: myUserId || socket.id,
+          userName: myUserName,
+        }
       };
 
       socket.emit('room:contribution:submit', contribution);
+      setContributions((prev) => upsertHmwByStableId(prev, [contribution]));
     });
 
     setHasSubmitted(true);
@@ -74,8 +133,8 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
   const handleVotingComplete = (selectedQuestions, results) => {
     console.log('HMW voting complete:', selectedQuestions);
     // selectedQuestions -> array of the top 3 voted HMW questions
-    const questionTexts = selectedQuestions.map(q => q.content?.question || q.content);
-    onContinue(questionTexts);
+    const texts = (selectedQuestions || []).map((q) => q?.content?.question || q?.content || '');
+    onContinue(texts);
   };
 
   const startVoting = () => {
@@ -112,7 +171,7 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
     // Group contributions by user
     const groupedContributions = {};
     contributions.forEach(contribution => {
-      const userId = contribution.userId || 'unknown';
+      const userId = contribution.userId || contribution.socketId || contribution.authorId || 'unknown';
       if (!groupedContributions[userId]) {
         groupedContributions[userId] = {
           userName: contribution.userName || 'Team Member',
@@ -197,12 +256,11 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
                     HMW Question {index + 1}
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-3 text-gray-500 text-sm">How might we</span>
                     <textarea
                       value={question}
                       onChange={(e) => updateHmwQuestion(index, e.target.value)}
-                      placeholder="...help users achieve their goals more easily?"
-                      className="w-full h-20 pl-24 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none text-sm"
+                      placeholder="How might we help users achieve their goals more easily?"
+                      className="w-full h-20 pl-5 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none text-sm"
                       disabled={hasSubmitted}
                     />
                   </div>

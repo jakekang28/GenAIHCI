@@ -75,7 +75,8 @@ const VotingComponent = ({
       // Update contributions from the event if not using predefined options
       if (!usingPredefinedOptions && data.contributions) {
         console.log(`[VotingComponent] Updating active contributions from event`);
-        setActiveContributions(dedupeByAuthor(data.contributions));
+        const list = data.type === "hmw_question" ? data.contributions : dedupeByAuthor(data.contributions)
+        setActiveContributions(list);
       }
       
       setVotingState('voting');

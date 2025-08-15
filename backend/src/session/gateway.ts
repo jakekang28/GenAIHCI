@@ -1,4 +1,4 @@
-
+import { randomUUID } from 'crypto';
 import {
   ConnectedSocket,
   MessageBody,
@@ -151,7 +151,30 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
     const event = isHost ? 'room:host_deciding' : 'room:loading';
     this.server.to(roomId).emit(event, { message });
   }
+  private async resolveMaxSelections(
+  roomId: string,
+  type: 'interview_question' | 'pov_statement' | 'hmw_question' | 'scenario_selection',
+  requested?: number
+): Promise<number> {
+  if (typeof requested === 'number' && requested >= 1) return requested;
 
+  try {
+    const policy = await this.db.getSessionState(roomId, 'voting_policy');
+    const cfg = policy?.[0]?.value?.maxSelectionsByType;
+    if (cfg && typeof cfg[type] === 'number' && cfg[type] >= 1) {
+      return cfg[type];
+    }
+  } catch { }
+
+  
+  const defaults: Record<string, number> = {
+    pov_statement: 1,
+    interview_question: 1,
+    hmw_question: 3,
+    scenario_selection: 1,
+  };
+  return defaults[type] ?? 1;
+}
   @SubscribeMessage('room:join')
   async handleJoinRoom(
     @MessageBody() body: { roomId: string; userId: string; userName: string },
@@ -214,14 +237,17 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
       // Send current state to joining user
       const members = this.getRoomMembers(roomId);
       const stage = this.getRoomStage(roomId);
-      const contributions = this.getRoomContributions(roomId);
-      
+      const povContribs = this.getRoomContributions(roomId, 'pov_statement');
+      const hmwContribs = this.getRoomContributions(roomId, 'hmw_question');
+      const iqContribs  = this.getRoomContributions(roomId, 'interview_question');
       socket.emit('room:members', { members }); //new event
       socket.emit('session:members', { members }); // Legacy
       socket.emit('room:stage', { stage }); //new event
       socket.emit('session:stage', { stage }); // Legacy
-      socket.emit('room:contributions', { contributions });
-      socket.emit('interview:questions', { questions: contributions.filter(c => c.type === 'interview_question') }); // Legacy
+      socket.emit('room:contributions', { roomId, type: 'pov_statement', contributions: povContribs });
+      socket.emit('room:contributions', { roomId, type: 'hmw_question', contributions: hmwContribs });
+      socket.emit('room:contributions', { roomId, type: 'interview_question', contributions: iqContribs });
+      
 
       // Broadcast Member Update to Room
       this.broadcastRoomMembers(roomId);
@@ -287,71 +313,84 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
   /** Submit contribution (question, POV statement, HMW question) */
   @SubscribeMessage('room:contribution:submit')
-  async handleContributionSubmit(
-    @MessageBody() body: { 
-      roomId: string; 
-      type: 'interview_question' | 'pov_statement' | 'hmw_question';
-      content: any;
-      saveToDb?: boolean;
-    },
-    @ConnectedSocket() socket: Socket,
-  ) {
-    const { roomId, type, content, saveToDb = false } = body || {};
-    if (!roomId || !type || !content) {
-      socket.emit('room:error', { message: 'Room ID, type, and content are required' });
-      return;
+async handleContributionSubmit(
+  @MessageBody() body: { 
+    roomId: string; 
+    type: 'interview_question' | 'pov_statement' | 'hmw_question';
+    content: any;
+    saveToDb?: boolean;
+  },
+  @ConnectedSocket() socket: Socket,
+) {
+  const { roomId, type, content, saveToDb = false } = body || {};
+  if (!roomId || !type || !content) {
+    socket.emit('room:error', { message: 'Room ID, type, and content are required' });
+    return;
+  }
+
+  const member = this.rooms.get(roomId)?.get(socket.id);
+  if (!member) {
+    socket.emit('room:error', { message: 'You are not a member of this room' });
+    return;
+  }
+
+  try {
+    if (!this.roomContributions.has(roomId)) {
+      this.roomContributions.set(roomId, new Map());
     }
+    const roomMap = this.roomContributions.get(roomId)!;
+    const userKey = member.userId || socket.id;
 
-    const member = this.rooms.get(roomId)?.get(socket.id);
-    if (!member) {
-      socket.emit('room:error', { message: 'You are not a member of this room' });
-      return;
-    }
-
-    try {
-      // Ensure contributions map exists
-      if (!this.roomContributions.has(roomId)) {
-        this.roomContributions.set(roomId, new Map());
-      }
-
-      const contribution: Contribution = {
+    const contribution: Contribution = {
       socketId: socket.id,
       userId: member.userId,
       userName: member.userName,
-        type,
-        content,
-        isSelected: false,
-        timestamp: new Date().toISOString()
-      };
+      type,
+      content,
+      isSelected: false,
+      timestamp: new Date().toISOString()
+    };
 
-      // Save to database if requested
-      if (saveToDb) {
-        const dbContribution = await this.db.submitContribution(
-          roomId,
-          member.userId,
-          member.userName,
-          type,
-          content
-        );
-        contribution.id = dbContribution.id;
-      }
-
-      // Store in memory for real-time updates
-      const contributionKey = contribution.id || socket.id;
-      this.roomContributions.get(roomId)!.set(contributionKey, contribution);
-
-      // Acknowledge to sender
-      socket.emit('room:contribution:ack', { ok: true, contribution });
-
-      // Always broadcast contributions for real-time collaboration
-      this.broadcastContributions(roomId, type);
-      
-      this.logger.log(`Contribution submitted: ${type} by ${member.userName} in room ${roomId}`);
-    } catch (error) {
-      this.logger.error('Error submitting contribution:', error);
-      socket.emit('room:error', { message: 'Failed to submit contribution' });
+    
+    if (saveToDb) {
+      const dbContribution = await this.db.submitContribution(
+        roomId, member.userId, member.userName, type, content
+      );
+      contribution.id = dbContribution?.id; 
     }
+
+    if (type === 'pov_statement') {
+      
+      contribution.id = `${userKey}:pov`;
+    } else if (type === 'hmw_question') {
+      let order = Number(content?.order);
+      if (!Number.isInteger(order) || order < 1 || order > 3) {
+        const used = new Set<number>();
+        for (const c of roomMap.values()) {
+          if (c.type === 'hmw_question' && (c.userId === member.userId || c.socketId === socket.id)) {
+            const o = Number(c.content?.order);
+            if (Number.isInteger(o) && o >= 1 && o <= 3) used.add(o);
+          }
+        }
+        order = [1, 2, 3].find(o => !used.has(o)) ?? 3;
+      }
+      contribution.content = { ...(contribution.content || {}), order };
+      contribution.id = `${userKey}:hmw:${order}`; 
+    } else {
+      
+      contribution.id = contribution.id || randomUUID();
+    }
+    roomMap.set(contribution.id!, contribution);
+
+
+    socket.emit('room:contribution:ack', { ok: true, contribution });
+    this.broadcastContributions(roomId, type);
+
+  } catch (error) {
+    this.logger.error('Error submitting contribution:', error);
+    socket.emit('room:error', { message: 'Failed to submit contribution' });
   }
+}
 
   /** Host decision: Change room stage */
   @SubscribeMessage('room:host:change_stage')
@@ -412,11 +451,12 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
       roomId: string; 
       type: 'interview_question' | 'pov_statement' | 'hmw_question' | 'scenario_selection';
       maxSelections?: number;
+      limitOptionIds?: string[];
     },
     @ConnectedSocket() socket: Socket,
   ) {
-    const { roomId, type, maxSelections = 1 } = body || {};
-    this.logger.log(`🗳️ VOTING START requested: ${JSON.stringify({roomId, type, maxSelections, socketId: socket.id})}`);
+    const { roomId, type } = body || {};
+    this.logger.log(`🗳️ VOTING START requested: ${JSON.stringify({roomId, type, maxSelections : body?.maxSelections, socketId: socket.id})}`);
     
     if (!roomId || !type) {
       this.logger.error('Missing roomId or type for voting start');
@@ -438,15 +478,7 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
       const votingSessionId = `${roomId}-${type}-${Date.now()}`;
       
       // Store voting state in session state for real-time tracking
-      await this.db.setSessionState(roomId, `voting_${type}`, {
-        sessionId: votingSessionId,
-        type,
-        maxSelections,
-        startedBy: member.userId,
-        startedAt: new Date().toISOString(),
-        votes: {},
-        status: 'active'
-      });
+      
 
       // Different Voting Options for Persona/Scenario Pairs (instead of contributions)
       let votingOptions;
@@ -464,13 +496,30 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
         votingOptions = this.getRoomContributions(roomId, type);
         this.logger.log(`Available contributions (${votingOptions.length}): ${JSON.stringify(votingOptions.map(c => ({id: c.id, content: c.content})))}`);
       }
-      
+      if (Array.isArray(body?.limitOptionIds) && body.limitOptionIds.length) {
+      votingOptions = votingOptions.filter((c: any) =>
+        body.limitOptionIds!.includes(c.id) || body.limitOptionIds!.includes(c.socketId)
+      );
+      }
+      let resolvedMax = await this.resolveMaxSelections(roomId, type, body?.maxSelections);
+      if (Array.isArray(votingOptions) && votingOptions.length > 0) {
+        resolvedMax = Math.max(1, Math.min(resolvedMax, votingOptions.length));
+      }
+      await this.db.setSessionState(roomId, `voting_${type}`, {
+        sessionId: votingSessionId,
+        type,
+        maxSelections : resolvedMax,
+        startedBy: member.userId,
+        startedAt: new Date().toISOString(),
+        votesByUser: {},
+        status: 'active'
+      });
       // Broadcast voting session start to all room members
       const payload = {
         roomId,
         votingSessionId,
         type,
-        maxSelections,
+        maxSelections : resolvedMax,
         contributions: votingOptions // contributions -> persona/scenario pairs
       };
       
@@ -491,12 +540,13 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
       votingSessionId?: string;
       contributionId?: string;
       roomId: string;
-      type: string;
+      type: 'interview_question' | 'pov_statement' | 'hmw_question' | 'scenario_selection';
       optionIds: string[];
     },
     @ConnectedSocket() socket: Socket,
   ) {
-    const { roomId, type, optionIds } = body || {};
+    const { roomId, type } = body || {};
+    const optionIds = Array.from(new Set((body?.optionIds || []).filter(Boolean)));
     this.logger.log(`🗳️ VOTE received: ${JSON.stringify({roomId, type, optionIds, socketId: socket.id})}`);
     
     if (!roomId || !type || !optionIds?.length) {
@@ -516,139 +566,148 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
       this.logger.log(`Member found: ${member.userName} (${member.userId})`);
 
       // Get current voting state from session state
-      const votingStates = await this.db.getSessionState(roomId, `voting_${type}`);
-      if (!votingStates.length) {
-        socket.emit('room:error', { message: 'No active voting session found' });
-        return;
-      }
-
-      const votingState = votingStates[0].value;
-      
-      // Update votes in session state (long-term)
-      votingState.votes[member.userId] = optionIds[0]; // Take first option for simple voting
-      
-      await this.db.setSessionState(roomId, `voting_${type}`, votingState);
-      
-      // Count current votes
-      const voteCount = Object.keys(votingState.votes).length;
-      const uniqueMembers = this.getUniqueRoomMembers(roomId);
-      
-      // Count votes for each option for real-time progress
-      const voteCounts: Record<string, number> = {};
-      Object.values(votingState.votes).forEach((optionId: any) => {
-        voteCounts[optionId] = (voteCounts[optionId] || 0) + 1;
-      });
-      
-      const progressPayload = {
-        roomId,
-        type,
-        totalVotes: voteCount,
-        totalMembers: uniqueMembers.length,
-        isComplete: voteCount >= uniqueMembers.length,
-        votes: voteCounts // Send individual vote counts for real-time display
-      };
-      
-      // Broadcast vote progress
-      this.logger.log(`Broadcasting room:vote_progress to room ${roomId}: ${JSON.stringify(progressPayload)}`);
-      this.server.to(roomId).emit('room:vote_progress', progressPayload);
-
-      // Check if voting is complete (everyone voted)
-      if (voteCount >= uniqueMembers.length) {
-        this.logger.log(`Voting complete! Total votes (${voteCount}) >= unique members (${uniqueMembers.length})`);
-        await this.handleVotingCompleteEphemeral(roomId, type, votingState);
-      }
-      
-      this.logger.log(`Vote submitted by ${member.userName} in room ${roomId}`);
-    } catch (error) {
-      this.logger.error('Error submitting vote:', error);
-      socket.emit('room:error', { message: 'Failed to submit vote' });
+      const states = await this.db.getSessionState(roomId, `voting_${type}`);
+    let votingState: any = states?.[0]?.value;
+    if (!votingState) votingState = {};
+    if (typeof votingState === 'string') {
+      try { votingState = JSON.parse(votingState); } catch { votingState = {}; }
     }
+
+    // 안전 초기화
+    if (typeof votingState !== 'object') votingState = {};
+    if (typeof votingState.maxSelections !== 'number' || votingState.maxSelections < 1) {
+      votingState.maxSelections = await this.resolveMaxSelections(roomId, type);
+    }
+    if (!votingState.votesByUser || typeof votingState.votesByUser !== 'object') {
+      votingState.votesByUser = {};
+    }
+
+    const maxSelections: number = votingState.maxSelections;
+    const votesByUser: Record<string, string[]> = votingState.votesByUser;
+
+    
+    const current = new Set<string>(votesByUser[member.userId] || []);
+    for (const id of optionIds) {
+      if (current.size < maxSelections) current.add(id);
+      
+    }
+    votesByUser[member.userId] = Array.from(current);
+
+    
+    votingState.votesByUser = votesByUser;
+    await this.db.setSessionState(roomId, `voting_${type}`, votingState);
+
+    
+    const uniqueMembers = this.getUniqueRoomMembers(roomId);
+    const voteCounts: Record<string, number> = {};
+    Object.values(votesByUser).forEach((arr: string[] = []) => {
+      arr.forEach((optId) => {
+        voteCounts[optId] = (voteCounts[optId] || 0) + 1;
+      });
+    });
+
+    
+    const usersCompleted = uniqueMembers
+      .filter(m => (votesByUser[m.userId]?.length || 0) >= maxSelections).length;
+
+    const progressPayload = {
+      roomId,
+      type,
+      totalVotes: usersCompleted,         
+      totalMembers: uniqueMembers.length, 
+      isComplete: usersCompleted >= uniqueMembers.length,
+      votes: voteCounts
+    };
+    this.server.to(roomId).emit('room:vote_progress', progressPayload);
+
+    
+    if (progressPayload.isComplete) {
+      await this.handleVotingCompleteEphemeral(roomId, type, votingState);
+    }
+  } catch (error) {
+    this.logger.error('Error submitting vote:', error);
+    socket.emit('room:error', { message: 'Failed to submit vote' });
+  }
   }
 
   /** Handle Long-term voting completion */
   private async handleVotingCompleteEphemeral(roomId: string, type: string, votingState: any) {
-    try {
-      // Count votes for each option
-      const voteCounts: Record<string, number> = {};
-      Object.values(votingState.votes).forEach((optionId: any) => {
-        voteCounts[optionId] = (voteCounts[optionId] || 0) + 1;
-      });
+  try {
+    const maxSelections = votingState?.maxSelections || 1;
+    const votesByUser = votingState?.votesByUser || votingState?.votes || {};
 
-      // Find winner(s)
-      const maxVotes = Math.max(...Object.values(voteCounts));
-      const winnerIds = Object.keys(voteCounts).filter(id => voteCounts[id] === maxVotes);
-
-      if (winnerIds.length === 1) {
-        // Clear winner
-        const winnerId = winnerIds[0];
-        
-        let winner;
-        if (type === 'scenario_selection') {
-          // For scenario selection, create winner object from predefined scenarios
-          const predefinedScenarios = [
-            { id: '1', content: 'Sofia Nguyen - Single Parent & Part-Time Evening Student' },
-            { id: '2', content: 'Roberto Alvarez - Independent Coffee Shop Owner' }, 
-            { id: '3', content: 'Fatima Hassan - Community Health Outreach Worker' },
-            { id: '4', content: 'Ethan Walker - Junior Remote Software Developer' }
-          ];
-          winner = predefinedScenarios.find(s => s.id === winnerId);
-        } else {
-          // For other types, look for contributions
-          const contributions = this.getRoomContributions(roomId, type);
-          console.log(`Looking for winner with ID: ${winnerId}`);
-          console.log(`Available contributions:`, contributions.map(c => ({ id: c.id, socketId: c.socketId, content: c.content })));
-          winner = contributions.find(c => c.id === winnerId || c.socketId === winnerId);
-          console.log(`Found winner:`, winner);
-        }
-
-        if (winner) {
-          // Store final selection directly in session
-          if (type === 'scenario_selection') {
-            await this.db.setFinalSelections(roomId, { 
-              scenario: { id: winner.id, content: winner.content }
-            });
-          } else {
-            const content = winner.content?.question || winner.content?.statement || winner.content;
-            
-            if (type === 'interview_question') {
-              await this.db.setFinalSelections(roomId, { questionContent: content });
-            } else if (type === 'pov_statement') {
-              await this.db.setFinalSelections(roomId, { povContent: content });
-            } else if (type === 'hmw_question') {
-              await this.db.setFinalSelections(roomId, { hmwContents: [content] });
-            }
-          }
-        }
-
-        // Broadcast completion
-        this.server.to(roomId).emit('room:voting_complete', {
-          type,
-          winner: winner || { id: winnerId, content: winnerId },
-          results: Object.entries(voteCounts).map(([id, count]) => ({ option_id: id, vote_count: count }))
-        });
-
-        this.logger.log(`Voting complete in room ${roomId}. Winner: ${winnerId} with ${maxVotes} votes`);
-      } else {
-        // For Ties, pick first winner
-        const winnerId = winnerIds[0];
-        this.server.to(roomId).emit('room:voting_complete', {
-          type,
-          winner: { id: winnerId, content: winnerId },
-          results: Object.entries(voteCounts).map(([id, count]) => ({ option_id: id, vote_count: count })),
-          isTie: true
-        });
-
-        this.logger.log(`Tie resolved in room ${roomId}. Selected: ${winnerId} (tied with ${winnerIds.length} options)`);
+    // 득표수 집계
+    const voteCounts: Record<string, number> = {};
+    Object.values(votesByUser).forEach((val: any) => {
+      if (Array.isArray(val)) {
+        val.forEach((id) => voteCounts[id] = (voteCounts[id] || 0) + 1);
+      } else if (val) {
+        voteCounts[val] = (voteCounts[val] || 0) + 1;
       }
+    });
 
-      // Clean up voting state
-      await this.db.setSessionState(roomId, `voting_${type}`, { ...votingState, status: 'completed' });
-      
-    } catch (error) {
-      this.logger.error('Error handling ephemeral voting completion:', error);
-      this.server.to(roomId).emit('room:error', { message: 'Error processing voting results' });
+    // 후보 조회
+    let contributions: any[] = [];
+    if (type === 'scenario_selection') {
+      contributions = [
+        { id: '1', content: 'Sofia Nguyen - Single Parent & Part-Time Evening Student' },
+        { id: '2', content: 'Roberto Alvarez - Independent Coffee Shop Owner' }, 
+        { id: '3', content: 'Fatima Hassan - Community Health Outreach Worker' },
+        { id: '4', content: 'Ethan Walker - Junior Remote Software Developer' }
+      ];
+    } else {
+      contributions = this.getRoomContributions(roomId, type);
     }
+    const findContribution = (id: string) =>
+      contributions.find((c: any) => c?.id === id || c?.socketId === id) || null;
+
+    // 결과 배열 (득표수 내림차순)
+    const resultsArr = Object.entries(voteCounts)
+      .map(([id, count]) => ({ option_id: id, vote_count: count, contribution: findContribution(id) }))
+      .sort((a, b) => b.vote_count - a.vote_count);
+
+    // 단일 우승자 모드(예: POV)에서만 tie 신호
+    let isTie = false;
+    if (maxSelections === 1 && resultsArr.length >= 2) {
+      const top = resultsArr[0]?.vote_count ?? 0;
+      const tied = resultsArr.filter(r => r.vote_count === top).length;
+      isTie = tied > 1;
+    }
+
+    // 브로드캐스트 payload
+    const payload: any = {
+      roomId,
+      type,
+      winner: resultsArr[0]?.contribution || (resultsArr[0] && { id: resultsArr[0].option_id, content: resultsArr[0].option_id }),
+      results: resultsArr,
+    };
+    if (isTie) payload.isTie = true;
+
+    this.server.to(roomId).emit('room:voting_complete', payload);
+
+    // (선택) 최종 저장: HMW는 상위 maxSelections개 저장, POV는 1개 저장
+    if (type === 'hmw_question') {
+      const topK = resultsArr.slice(0, maxSelections)
+        .map(r => r.contribution?.content?.question || r.contribution?.content)
+        .filter(Boolean);
+      if (topK.length) {
+        await this.db.setFinalSelections(roomId, { hmwContents: topK });
+      }
+    } else if (type === 'pov_statement' && resultsArr[0]?.contribution) {
+      const content = resultsArr[0].contribution.content?.statement || resultsArr[0].contribution.content;
+      await this.db.setFinalSelections(roomId, { povContent: content });
+    } else if (type === 'interview_question' && resultsArr[0]?.contribution) {
+      const content = resultsArr[0].contribution.content?.question || resultsArr[0].contribution.content;
+      await this.db.setFinalSelections(roomId, { questionContent: content });
+    }
+
+    // 상태 완료 처리
+    await this.db.setSessionState(roomId, `voting_${type}`, { ...votingState, status: 'completed' });
+  } catch (error) {
+    this.logger.error('Error handling ephemeral voting completion:', error);
+    this.server.to(roomId).emit('room:error', { message: 'Error processing voting results' });
   }
+}
 
 
 
