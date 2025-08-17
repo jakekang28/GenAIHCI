@@ -23,8 +23,15 @@ export default function RoomEntry() {
 
 
   const persistGuest = (id, name) => {
+    // Store in separate keys (legacy format)
     localStorage.setItem('guestUserId', id);
     localStorage.setItem('guestName', name);
+    
+    // Store in unified JSON format in both sessionStorage (primary) and localStorage (backup)
+    const guestData = { guestUserId: id, guestName: name };
+    const jsonData = JSON.stringify(guestData);
+    sessionStorage.setItem('guestUser', jsonData);
+    localStorage.setItem('guestUser', jsonData);
   };
 
   const goToRoom = (id) => {

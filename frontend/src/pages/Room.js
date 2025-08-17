@@ -18,17 +18,47 @@ export default function Room() {
   useEffect(() => {
     if (!sessionId) return;
     
-    // Fix: Use localStorage instead of sessionStorage, and don't generate new IDs
-    const guestUserId = localStorage.getItem('guestUserId');
-    const guestName = localStorage.getItem('guestName') || 'Guest';
+    // Use sessionStorage-first approach (consistent with useLocalGuest)
+    let guestData = null;
     
-    if (!guestUserId) {
-      console.error('No guestUserId found in localStorage');
+    // Try sessionStorage first (tab-isolated), then localStorage
+    const sessionData = sessionStorage.getItem('guestUser');
+    const localData = localStorage.getItem('guestUser');
+    
+    if (sessionData) {
+      try {
+        guestData = JSON.parse(sessionData);
+      } catch (e) {
+        console.warn('Failed to parse sessionStorage guest data');
+      }
+    } else if (localData) {
+      try {
+        guestData = JSON.parse(localData);
+      } catch (e) {
+        console.warn('Failed to parse localStorage JSON guest data');
+      }
+    }
+    
+    // Fall back to separate keys if needed
+    if (!guestData) {
+      const guestUserId = localStorage.getItem('guestUserId');
+      const guestName = localStorage.getItem('guestName');
+      if (guestUserId && guestName) {
+        guestData = { guestUserId, guestName };
+      }
+    }
+    
+    if (!guestData || !guestData.guestUserId) {
+      console.error('No guestUserId found in storage');
       return;
     }
 
     // ✅ 이미 같은 세션이면 아무 것도 안 하도록 보장
-    ensureJoined(sessionId, { userId: guestUserId, userName: guestName, role: 'member' });
+    ensureJoined(sessionId, { 
+      userId: guestData.guestUserId, 
+      userName: guestData.guestName || 'Guest', 
+      role: 'member' 
+    });
   }, [sessionId, ensureJoined]);
 
   return (
