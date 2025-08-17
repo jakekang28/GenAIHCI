@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, ChevronRight, MessageCircle, Send } from 'lucide-react';
+import { useSession } from '../../providers/SessionProvider';
+import { useLocalGuest } from '../../hooks/useLocalGuest';
+import { apiService } from '../../services/apiService';
 
 const InterviewSession = ({ 
   selectedScenario, 
@@ -9,7 +12,11 @@ const InterviewSession = ({
   generateAIResponse,
   onUpdateQaHistory 
 }) => {
+  const { sessionId } = useSession();
+  const { guest } = useLocalGuest();
   const [chatMessages, setChatMessages] = useState([]);
+
+
   const [followUpQuestion, setFollowUpQuestion] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [hasAskedPreplanned, setHasAskedPreplanned] = useState(false);
@@ -40,9 +47,13 @@ const InterviewSession = ({
         const newQA = { question: selectedGroupQuestion, answer: newAnswer };
         setQaHistory(prev => {
           const updated = [...prev, newQA];
-          onUpdateQaHistory(updated);
           return updated;
         });
+        
+        // Update parent QA history separately to avoid setState in render warning
+        setTimeout(() => {
+          onUpdateQaHistory([...qaHistory, newQA]);
+        }, 0);
       } catch (error) {
         console.error('Error generating AI response:', error);
       } finally {
@@ -67,19 +78,26 @@ const InterviewSession = ({
       const newQA = { question: q, answer: aiAnswer };
       setQaHistory(prev => {
         const updated = [...prev, newQA];
-        onUpdateQaHistory(updated);
         return updated;
       });
+      
+      // Update parent QA history separately to avoid setState in render warning
+      setTimeout(() => {
+        onUpdateQaHistory([...qaHistory, newQA]);
+      }, 0);
     } catch (error) {
       console.error('Error generating AI response:', error);
     } finally {
       setIsTyping(false);
     }
     
-    setCurrentFollowUpIndex(i => i + 1);
-    if (currentFollowUpIndex + 1 >= 3) {
-      setInterviewCompleted(true);
-    }
+    setCurrentFollowUpIndex(i => {
+      const newIndex = i + 1;
+              if (newIndex >= 3) {
+          setInterviewCompleted(true);
+        }
+      return newIndex;
+    });
     setFollowUpQuestion('');
   };
 
@@ -94,7 +112,58 @@ const InterviewSession = ({
     }
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    // Force re-read storage to get latest guest data (prefer sessionStorage for tab isolation)
+    let freshGuest = null;
+    
+    // Try sessionStorage first (tab-isolated), then localStorage
+    const sessionData = sessionStorage.getItem('guestUser');
+    const localData = localStorage.getItem('guestUser');
+    
+    if (sessionData) {
+      try {
+        freshGuest = JSON.parse(sessionData);
+      } catch (e) {
+        console.warn('Failed to parse sessionStorage guest data');
+      }
+    } else if (localData) {
+      try {
+        freshGuest = JSON.parse(localData);
+      } catch (e) {
+        console.warn('Failed to parse localStorage JSON guest data');
+      }
+    }
+    
+    // Fall back to separate keys if needed
+    if (!freshGuest) {
+      const freshGuestUserId = localStorage.getItem('guestUserId');
+      const freshGuestName = localStorage.getItem('guestName');
+      if (freshGuestUserId && freshGuestName) {
+        freshGuest = { guestUserId: freshGuestUserId, guestName: freshGuestName };
+      }
+    }
+    
+    try {
+      // Use fresh guest data from storage to ensure accuracy
+      const finalGuest = (freshGuest && freshGuest.guestUserId && freshGuest.guestName) ? freshGuest : guest;
+      
+      // Save transcript to database before continuing
+      if (sessionId && finalGuest && finalGuest.guestUserId && chatMessages.length > 0) {
+        await apiService.saveTranscript(
+          sessionId,
+          finalGuest.guestUserId,
+          finalGuest.guestName,
+          chatMessages,
+          selectedScenario
+        );
+      } else {
+        console.warn('Cannot save transcript, missing data');
+      }
+    } catch (error) {
+      console.error('❌ [InterviewSession] Failed to save transcript:', error);
+      // Continue anyway - don't block the flow
+    }
+    
     onContinue(chatMessages);
   };
 
@@ -253,7 +322,10 @@ const InterviewSession = ({
                 </p>
               </div>
               <button 
-                onClick={handleContinue}
+                onClick={() => {
+          
+                  handleContinue();
+                }}
                 className="bg-teal-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-teal-700 transition-colors flex items-center mx-auto"
               >
                 Review Interview Transcript

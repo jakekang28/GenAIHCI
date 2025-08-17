@@ -48,5 +48,37 @@ export class DbController {
     } catch (e) {
       throw new HttpException(e.message ?? 'Failed to fetch qna', HttpStatus.INTERNAL_SERVER_ERROR);
     }
-  }    
+  }
+
+  @Post('transcripts')
+  async saveTranscript(@Body() body: {
+    sessionId: string;
+    userId: string;
+    userName: string;
+    messages: any[];
+    scenarioData?: any;
+  }) {
+    try {
+      const { sessionId, userId, userName, messages, scenarioData } = body;
+      
+      if (!sessionId || !userId || !userName || !messages) {
+        throw new HttpException('sessionId, userId, userName, and messages are required', HttpStatus.BAD_REQUEST);
+      }
+
+      const transcript = await this.db.saveTranscript(sessionId, userId, userName, messages, scenarioData);
+      return { success: true, transcript };
+    } catch (e) {
+      throw new HttpException(e.message ?? 'Failed to save transcript', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Get('transcripts/:sessionId')
+  async getSessionTranscripts(@Param('sessionId') sessionId: string) {
+    try {
+      const transcripts = await this.db.getTranscripts(sessionId);
+      return { sessionId, transcripts };
+    } catch (e) {
+      throw new HttpException(e.message ?? 'Failed to fetch transcripts', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
 }

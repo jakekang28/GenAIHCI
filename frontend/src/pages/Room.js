@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSession } from '../providers/SessionProvider';
+import { Users, Share2, Play, Wifi, WifiOff, ArrowLeft } from 'lucide-react';
 
 export default function Room() {
   const { sessionId } = useParams();
@@ -18,53 +19,194 @@ export default function Room() {
   useEffect(() => {
     if (!sessionId) return;
     
-    // Fix: Use localStorage instead of sessionStorage, and don't generate new IDs
-    const guestUserId = localStorage.getItem('guestUserId');
-    const guestName = localStorage.getItem('guestName') || 'Guest';
+    // Use sessionStorage-first approach (consistent with useLocalGuest)
+    let guestData = null;
     
-    if (!guestUserId) {
-      console.error('No guestUserId found in localStorage');
+    // Try sessionStorage first (tab-isolated), then localStorage
+    const sessionData = sessionStorage.getItem('guestUser');
+    const localData = localStorage.getItem('guestUser');
+    
+    if (sessionData) {
+      try {
+        guestData = JSON.parse(sessionData);
+      } catch (e) {
+        console.warn('Failed to parse sessionStorage guest data');
+      }
+    } else if (localData) {
+      try {
+        guestData = JSON.parse(localData);
+      } catch (e) {
+        console.warn('Failed to parse localStorage JSON guest data');
+      }
+    }
+    
+    // Fall back to separate keys if needed
+    if (!guestData) {
+      const guestUserId = localStorage.getItem('guestUserId');
+      const guestName = localStorage.getItem('guestName');
+      if (guestUserId && guestName) {
+        guestData = { guestUserId, guestName };
+      }
+    }
+    
+    if (!guestData || !guestData.guestUserId) {
+      console.error('No guestUserId found in storage');
       return;
     }
 
     // ✅ 이미 같은 세션이면 아무 것도 안 하도록 보장
-    ensureJoined(sessionId, { userId: guestUserId, userName: guestName, role: 'member' });
+    ensureJoined(sessionId, { 
+      userId: guestData.guestUserId, 
+      userName: guestData.guestName || 'Guest', 
+      role: 'member' 
+    });
   }, [sessionId, ensureJoined]);
 
   return (
-    <div style={{ minHeight: '100vh', padding: 24 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Room Code: {roomCode}</h1>
-      <p style={{ color: '#6b7280', marginBottom: 4 }}>
-        Socket {connected ? 'Connected ✅' : 'Disconnected ❌'}
-      </p>
-      <p style={{ color: '#10b981', fontSize: 14, fontWeight: 600, marginBottom: 16 }}>
-        💡 Share this room code with others to let them join: <span style={{ background: '#f0f9ff', padding: '2px 8px', borderRadius: 6, fontFamily: 'monospace' }}>{roomCode}</span>
-      </p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6 flex items-center justify-center">
+      <div className="max-w-4xl mx-auto w-full">
+        {/* Header Section */}
+        <div className="mb-8">
+          <div className="flex items-center mb-8">
+            <button 
+              onClick={() => navigate('/')}
+              className="flex items-center text-gray-600 hover:text-gray-800 transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5 mr-2" />
+              Back to Room Entry
+            </button>
+          </div>
+          
+          <div className="text-center">
+            <h1 className="text-4xl font-bold text-gray-800 mb-3">Room Session</h1>
+            <p className="text-lg text-gray-600">
+              Welcome to your collaborative learning session
+            </p>
+          </div>
+        </div>
 
-      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 16, marginBottom: 16 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>현재 멤버</h2>
-        {members.length === 0 ? (
-          <p style={{ color: '#6b7280' }}>No members entered yet.</p>
-        ) : (
-          <ul>
-            {members.map((m) => (
-              <li key={m.socketId}>
-                {m.userName} <span style={{ color: '#9ca3af' }}>({m.userId})</span>
-                {/* ✅ 내 소켓과 일치하면 Me 표시 */}
-                {m.socketId === mySocketId && <strong> ← Me</strong>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+        {/* Main Content Grid */}
+        <div className="grid lg:grid-cols-2 gap-6 mb-6">
+          {/* Room Code Section */}
+          <div className="bg-white rounded-2xl shadow-xl p-6 flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                  <Share2 className="w-5 h-5 text-blue-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-800">Room Code</h2>
+              </div>
+              <div className="flex items-center space-x-2">
+                {connected ? (
+                  <div className="flex items-center text-green-600">
+                    <Wifi className="w-4 h-4 mr-1" />
+                    <span className="text-xs font-medium">Connected</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center text-red-600">
+                    <WifiOff className="w-4 h-4 mr-1" />
+                    <span className="text-xs font-medium">Disconnected</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center flex-grow flex flex-col justify-center">
+              <p className="text-gray-700 mb-3 text-sm">
+                💡 Share this room code with others to let them join:
+              </p>
+              <div className="bg-white border border-blue-300 rounded-lg px-4 py-3 inline-block">
+                <code className="text-xl font-mono font-bold text-blue-600 tracking-wider">
+                  {roomCode}
+                </code>
+              </div>
+            </div>
+          </div>
 
-      <div style={{ display: 'flex', gap: 12 }}>
-        <button
-          onClick={() =>navigate(`/app/${sessionId}`)}
-          style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}
-        >
-          Start Learning
-        </button>
+          {/* Members Section */}
+          <div className="bg-white rounded-2xl shadow-xl p-6 flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                  <Users className="w-5 h-5 text-green-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-800">Current Members</h2>
+              </div>
+              <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-medium">
+                {members.length} {members.length === 1 ? 'member' : 'members'}
+              </span>
+            </div>
+            
+            <div className="flex-grow">
+              {members.length === 0 ? (
+                <div className="text-center py-6 flex flex-col justify-center h-full">
+                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Users className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <p className="text-gray-500 text-sm">No members have joined yet</p>
+                  <p className="text-gray-400 text-xs">Share the room code to invite others</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {members.map((m) => (
+                    <div 
+                      key={m.socketId}
+                      className={`flex items-center justify-between p-3 rounded-lg border transition-all duration-200 ${
+                        m.socketId === mySocketId 
+                          ? 'bg-blue-50 border-blue-200' 
+                          : 'bg-gray-50 border-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center mr-2 ${
+                          m.socketId === mySocketId ? 'bg-blue-100' : 'bg-gray-100'
+                        }`}>
+                          <span className={`text-xs font-medium ${
+                            m.socketId === mySocketId ? 'text-blue-600' : 'text-gray-600'
+                          }`}>
+                            {m.userName.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div>
+                          <span className={`text-sm font-medium ${
+                            m.socketId === mySocketId ? 'text-blue-800' : 'text-gray-800'
+                          }`}>
+                            {m.userName}
+                          </span>
+                          {m.socketId === mySocketId && (
+                            <span className="ml-2 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                              You
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-xs text-gray-500 font-mono">
+                        {m.userId.slice(0, 8)}...
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Action Section */}
+        <div className="bg-white rounded-2xl shadow-xl p-6">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-800 mb-3">Ready to Start?</h2>
+            <p className="text-gray-600 mb-6">
+              Begin your collaborative learning session with your team members
+            </p>
+            <button
+              onClick={() => navigate(`/app/${sessionId}`)}
+              className="bg-teal-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-teal-700 transition-all duration-200 flex items-center justify-center mx-auto hover:transform hover:scale-105"
+            >
+              <Play className="w-5 h-5 mr-2" />
+              Start Learning Session
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

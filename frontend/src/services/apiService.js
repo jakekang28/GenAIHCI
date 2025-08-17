@@ -109,11 +109,37 @@ class ApiService {
   }
   async preEvaluation(initQ, persona) {
     try {
-      // Fix: Use localStorage instead of sessionStorage, and don't generate new IDs
-      const guestUserId = localStorage.getItem('guestUserId');
-      const guestName = localStorage.getItem('guestName') || 'Guest';
+      // Use sessionStorage-first approach (consistent with useLocalGuest)
+      let guestData = null;
       
-      if (!guestUserId) {
+      // Try sessionStorage first (tab-isolated), then localStorage
+      const sessionData = sessionStorage.getItem('guestUser');
+      const localData = localStorage.getItem('guestUser');
+      
+      if (sessionData) {
+        try {
+          guestData = JSON.parse(sessionData);
+        } catch (e) {
+          console.warn('Failed to parse sessionStorage guest data');
+        }
+      } else if (localData) {
+        try {
+          guestData = JSON.parse(localData);
+        } catch (e) {
+          console.warn('Failed to parse localStorage JSON guest data');
+        }
+      }
+      
+      // Fall back to separate keys if needed
+      if (!guestData) {
+        const guestUserId = localStorage.getItem('guestUserId');
+        const guestName = localStorage.getItem('guestName');
+        if (guestUserId && guestName) {
+          guestData = { guestUserId, guestName };
+        }
+      }
+      
+      if (!guestData || !guestData.guestUserId) {
         throw new Error('No guestUserId found. Please create a room first.');
       }
       
@@ -123,8 +149,8 @@ class ApiService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          guestUserId: guestUserId,  
-          guestName: guestName,      
+          guestUserId: guestData.guestUserId,  
+          guestName: guestData.guestName || 'Guest',      
           question: initQ,           
           persona: persona           
         }),
@@ -210,6 +236,42 @@ class ApiService {
       throw error;
     }
   }
+
+  async saveTranscript(sessionId, userId, userName, messages, scenarioData) {
+    const response = await fetch(`${API_BASE_URL}/db/transcripts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sessionId,
+        userId,
+        userName,
+        messages,
+        scenarioData
+      }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to save transcript');
+    }
+    const data = await response.json();
+    return data;
+  }
+
+  async getSessionTranscripts(sessionId) {
+    const response = await fetch(`${API_BASE_URL}/db/transcripts/${sessionId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) {
+      throw new Error('Failed to fetch session transcripts');
+    }
+    const data = await response.json();
+    return data;
+  }
+
   //HEALTH CHECK ENDPOINT
 
   /**
