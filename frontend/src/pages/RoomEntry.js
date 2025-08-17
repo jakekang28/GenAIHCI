@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiService from '../services/apiService';
+import { Users, Plus, LogIn, User, Hash } from 'lucide-react';
 
 const API_BASE = 'http://localhost:3000';
 
@@ -20,7 +21,6 @@ export default function RoomEntry() {
   const [joining, setJoining] = useState(false);
   const [sessionKey, setSessionKey] = useState('');
   const [error, setError] = useState(null);
-
 
   const persistGuest = (id, name) => {
     // Store in separate keys (legacy format)
@@ -136,88 +136,137 @@ export default function RoomEntry() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, background: 'linear-gradient(135deg,#f0fdfa,#d1fae5)' }}>
-      <div style={{ width: '100%', maxWidth: 840 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 800, color: '#1f2937', marginBottom: 8 }}>Select Room</h1>
-        <p style={{ color: '#6b7280', marginBottom: 16 }}>Create a new room or enter existing room by using the shared room code</p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6 flex items-center justify-center">
+      <div className="max-w-6xl mx-auto w-full">
+        <div className="text-center mb-12 fade-in">
+          <h1 className="text-5xl font-bold text-gray-800 mb-4">Room Management</h1>
+          <p className="text-xl text-gray-600">
+            Create a new room or join an existing one using the shared room code
+          </p>
+        </div>
 
         {error && (
-          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center">
+            <div className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center mr-3">
+              <span className="text-red-600 text-sm">!</span>
+            </div>
             {error}
           </div>
         )}
 
-        {/* NEW: 공통 게스트 정보 입력 섹션 */}
-        <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 10px 30px rgba(0,0,0,0.06)', padding: 24, marginBottom: 24 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1f2937', marginBottom: 12 }}>Your Info</h2>
-          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr auto' }}>
-            <input
-              type="text"
-              value={guestName}
-              onChange={(e) => setGuestName(e.target.value)}
-              placeholder="Your name"
-              style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', outline: 'none' }}
-            />
-            <div style={{ 
-              padding: '10px 12px', 
-              borderRadius: 10, 
-              background: '#f3f4f6', 
-              border: '1px solid #e5e7eb',
-              color: '#6b7280',
-              fontSize: '14px',
-              display: 'flex',
-              alignItems: 'center'
-            }}>
-              {guestUserId ? `ID: ${guestUserId.slice(0, 8)}...` : 'ID will be generated'}
+        {/* Guest Information Section */}
+        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
+          <div className="flex items-center mb-6">
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-4">
+              <User className="w-6 h-6 text-blue-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800">Your Information</h2>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Your Name</label>
+              <input
+                type="text"
+                value={guestName}
+                onChange={(e) => setGuestName(e.target.value)}
+                placeholder="Enter your name"
+                className="w-full h-12 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">User ID</label>
+              <div className="h-12 px-4 bg-gray-50 border border-gray-300 rounded-lg flex items-center text-gray-600">
+                {guestUserId ? (
+                  <div className="flex items-center">
+                    <Hash className="w-4 h-4 mr-2" />
+                    {guestUserId}
+                  </div>
+                ) : (
+                  <span className="text-gray-500">ID will be generated automatically</span>
+                )}
+              </div>
             </div>
           </div>
-          <p style={{ color: '#6b7280', fontSize: 12, marginTop: 8 }}>
-            * 이름을 입력하고 방을 만들거나 입장하면 자동으로 ID가 생성됩니다.
+          
+          <p className="text-sm text-gray-500">
+            * Your name is required to create or join a room. A unique ID will be generated automatically.
           </p>
         </div>
 
-        <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
-          {/* 방 만들기 */}
-          <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 10px 30px rgba(0,0,0,0.06)', padding: 24 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1f2937', marginBottom: 8 }}>Create Room</h2>
-            <p style={{ color: '#6b7280', marginBottom: 16 }}>Receive the provided room code and share the room code with your group members.</p>
+        <div className="grid lg:grid-cols-2 gap-8">
+          {/* Create Room Card */}
+          <div className="bg-white rounded-2xl shadow-xl p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 flex flex-col">
+            <div className="flex items-center mb-6">
+              <div className="w-12 h-12 bg-teal-100 rounded-full flex items-center justify-center mr-4">
+                <Plus className="w-6 h-6 text-teal-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-800">Create Room</h2>
+            </div>
+            
+            <p className="text-gray-600 mb-6 leading-relaxed flex-grow">
+              Start a new collaborative session. You'll receive a room code to share with your group members.
+            </p>
+            
             <button
               onClick={createRoom}
               disabled={creating}
-              style={{
-                width: '100%', padding: '12px 16px', borderRadius: 10, fontWeight: 700,
-                color: '#fff', background: creating ? '#86efac' : '#059669',
-                cursor: creating ? 'not-allowed' : 'pointer', border: 'none'
-              }}
+              className="w-full bg-teal-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-teal-700 transition-all duration-200 flex items-center justify-center hover:transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none mt-auto"
             >
-              {creating ? 'Creating…' : 'Create New Room'}
+              {creating ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-5 h-5 mr-2" />
+                  Create New Room
+                </>
+              )}
             </button>
           </div>
 
-          {/* 방 입장 */}
-          <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 10px 30px rgba(0,0,0,0.06)', padding: 24 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1f2937', marginBottom: 8 }}>Enter Room</h2>
-            <p style={{ color: '#6b7280', marginBottom: 16 }}>Enter the room code shared by the host.</p>
-            <input
-              type="text"
-              value={sessionKey}
-              onChange={(e) => setSessionKey(e.target.value)}
-              placeholder="예: ABC123"
-              style={{
-                width: '100%', border: '1px solid #e5e7eb', borderRadius: 10,
-                padding: '10px 12px', marginBottom: 12, outline: 'none'
-              }}
-            />
+          {/* Join Room Card */}
+          <div className="bg-white rounded-2xl shadow-xl p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 flex flex-col">
+            <div className="flex items-center mb-6">
+              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mr-4">
+                <LogIn className="w-6 h-6 text-purple-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-800">Join Room</h2>
+            </div>
+            
+            <p className="text-gray-600 mb-6 leading-relaxed flex-grow">
+              Enter the room code shared by the host to join an existing collaborative session.
+            </p>
+            
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Room Code</label>
+              <input
+                type="text"
+                value={sessionKey}
+                onChange={(e) => setSessionKey(e.target.value)}
+                placeholder="e.g., ABC123"
+                className="w-full h-12 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+              />
+            </div>
+            
             <button
               onClick={joinRoom}
               disabled={joining}
-              style={{
-                width: '100%', padding: '12px 16px', borderRadius: 10, fontWeight: 700,
-                color: '#fff', background: joining ? '#9ca3af' : '#111827',
-                cursor: joining ? 'not-allowed' : 'pointer', border: 'none'
-              }}
+              className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-purple-700 transition-all duration-200 flex items-center justify-center hover:transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none mt-auto"
             >
-              {joining ? 'Entering…' : 'Enter'}
+              {joining ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Joining...
+                </>
+              ) : (
+                <>
+                  <LogIn className="w-5 h-5 mr-2" />
+                  Join Room
+                </>
+              )}
             </button>
           </div>
         </div>
