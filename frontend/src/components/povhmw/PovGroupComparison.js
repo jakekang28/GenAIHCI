@@ -8,6 +8,7 @@ const PovGroupComparison = ({ povStatement, onBack, onContinue }) => {
   const groupmatePovStatements = generateGroupmatePovStatements(povStatement);
 
   const handleContinue = () => {
+    console.log("[Selected POV] : ", selectedGroupPov)
     if (selectedGroupPov) {
       onContinue(selectedGroupPov);
     }

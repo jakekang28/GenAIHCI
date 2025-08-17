@@ -9,16 +9,26 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [contributions, setContributions] = useState([]);
   const [phase, setPhase] = useState('create'); // types:'create', 'voting', 'results'
-  //---Util Function for only leaving one POV per person---
+  const [povWinner, setPovWinner] = useState(null);
 
+  // --- helper: 결과/기여 객체에서 안전하게 텍스트 추출 ---
+  const extractWinnerText = (winnerLike) => {
+    if (!winnerLike) return '';
+    const c = winnerLike.contribution || winnerLike; // winner가 result row거나 contribution 자체일 수 있음
+    if (typeof c === 'string') return c;
+    if (typeof c?.content === 'string') return c.content;
+    if (typeof c?.content?.statement === 'string') return c.content.statement;
+    if (typeof c?.content?.question === 'string') return c.content.question;
+    return '';
+  };
+
+  //---Util Function for only leaving one POV per person---
   const toArray = (x) => (Array.isArray(x) ? x : x ? [x] : []);
   const normalize = (c) => {
     const content = typeof c?.content === 'string' ? { statement: c.content } : (c?.content ?? {});
     const userId  = c?.userId   ?? content?.userId;
-    const socketId= c?.socketId ?? content?.socketId ?? c?.socket_id; // 혹시 필드명이 다를 경우 대비
+    const socketId= c?.socketId ?? content?.socketId ?? c?.socket_id;
     let authorId  = c?.authorId ?? content?.authorId ?? c?.user?.id ?? userId ?? socketId;
-
-    // 'me' 같은 placeholder 교정
     if (authorId === 'me' && socket?.id) authorId = socket.id;
 
     return {
@@ -49,7 +59,6 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
     incoming.forEach((n) => {
       const idx = out.findIndex((p) => samePerson(p, n));
       if (idx >= 0) {
-        // 기존 값과 합치되, 새로 온 필드가 우선
         out[idx] = { ...out[idx], ...n };
       } else {
         out.push(n);
@@ -58,38 +67,40 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
 
     return out;
   };
-  //End util
+  // End util
 
   useEffect(() => {
     if (!socket) return;
 
-    // Listen for contributions from other members
     const handleContributions = (data) => {
       if (data.type === 'pov_statement') {
         const incoming = toArray(data?.contributions?.length ? data.contributions : data);
         setContributions((prev) => upsertByIdentity(prev, incoming));
       }
     };
+
     const handleContributionAck = (ack) => {
       if (!ack?.ok || !ack?.contribution) return;
       setContributions((prev) => upsertByIdentity(prev, [ack.contribution]));
-    }
-    const handleVotingStarted = (data) => {
-    if (data?.roomId !== sessionId || data?.type !== 'pov_statement') return;
-    setPhase('voting');                 
-    if (data.contributions) {
-      setContributions(upsertByIdentity([], data.contributions));
-    }
     };
+
+    const handleVotingStarted = (data) => {
+      if (data?.roomId !== sessionId || data?.type !== 'pov_statement') return;
+      setPhase('voting');
+      if (data.contributions) {
+        setContributions(upsertByIdentity([], data.contributions));
+      }
+    };
+
     const handlePhaseChange = (data) => {
       if (data.stage) {
         setPhase(data.stage);
-        //only change mine
         if (data.stage === 'create') {
           setHasSubmitted(false);
         }
       }
     };
+
     socket.on('room:voting_started', handleVotingStarted);
     socket.on('room:contributions', handleContributions);
     socket.on('room:contribution:ack', handleContributionAck);
@@ -115,7 +126,7 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
       type: 'pov_statement',
       userId: myUserId,
       socketId: socket.id,
-      userName: myUserName,                              
+      userName: myUserName,
       content: {
         statement: myPovStatement.trim(),
         needs: needs.filter((n) => n.trim()),
@@ -124,7 +135,7 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
         userId: myUserId,
         socketId: socket.id,
         authorId: myUserId || socket.id,
-        userName: myUserName,          
+        userName: myUserName,
       },
       saveToDb: true,
     };
@@ -134,26 +145,18 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
     setHasSubmitted(true);
   };
 
-  const handleVotingComplete = (winner, results) => {
-    console.log('POV voting complete:', winner);
-    // The winner.content should contain the POV statement
-    onContinue(winner.content.statement);
-  };
-
   const startVoting = () => {
     if (!socket) return;
-    console.log('[client] emit room:start_voting', { sessionId, type: 'pov_statement', maxSelections: 1, socketId: socket.id });
     socket.emit('room:start_voting', {
       roomId: sessionId,
       type: 'pov_statement',
-      maxSelections: 1
+      maxSelections: 1,
     });
   };
 
   const renderNeedsInsights = () => (
     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 mb-6 border border-blue-200">
       <h3 className="text-lg font-semibold text-blue-800 mb-4">📋 Team Needs & Insights</h3>
-      
       <div className="grid md:grid-cols-2 gap-6">
         <div>
           <h4 className="font-medium text-blue-700 mb-3">🎯 Needs:</h4>
@@ -165,7 +168,6 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
             ))}
           </ul>
         </div>
-        
         <div>
           <h4 className="font-medium text-blue-700 mb-3">💡 Insights:</h4>
           <ul className="space-y-2">
@@ -228,7 +230,7 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
             <ArrowLeft className="h-5 w-5" />
             <span>Back</span>
           </button>
-          
+
           <div className="text-right">
             <p className="text-sm text-gray-600">Room: {sessionId?.slice(-6)?.toUpperCase()}</p>
             <p className="text-sm text-purple-600 font-medium">{members.length} members</p>
@@ -253,7 +255,7 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
               <Lightbulb className="h-6 w-6 text-yellow-500 mr-2" />
               Create Your POV Statement
             </h2>
-            
+
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -302,7 +304,7 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
                 </button>
               )}
             </div>
-            
+
             {renderPovList()}
           </div>
         </div>
@@ -331,10 +333,15 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
           title="Vote for the Best POV Statement"
           subtitle="Consider which statement best integrates the needs and insights while clearly framing the design challenge"
           maxSelections={1}
-          onVotingComplete={handleVotingComplete}
+          onVotingComplete={(winner, results) => {
+            const text = extractWinnerText(winner);
+            if (!text) return;
+            setPovWinner(text);
+            onContinue(text);
+          }}
           onStartVotingClick={({ roomId, type, maxSelections }) => {
-          socket.emit('room:start_voting', { roomId, type, maxSelections });
-        }}
+            socket.emit('room:start_voting', { roomId, type, maxSelections });
+          }}
         />
       </div>
     </div>

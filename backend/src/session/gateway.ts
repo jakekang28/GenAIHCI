@@ -663,7 +663,7 @@ async handleContributionSubmit(
 
     // 결과 배열 (득표수 내림차순)
     const resultsArr = Object.entries(voteCounts)
-      .map(([id, count]) => ({ option_id: id, vote_count: count, contribution: findContribution(id) }))
+      .map(([id, count]) => ({ option_id: id, vote_count: count, contribution_id : id, contribution: findContribution(id) }))
       .sort((a, b) => b.vote_count - a.vote_count);
 
     // 단일 우승자 모드(예: POV)에서만 tie 신호
@@ -685,7 +685,7 @@ async handleContributionSubmit(
 
     this.server.to(roomId).emit('room:voting_complete', payload);
 
-    // (선택) 최종 저장: HMW는 상위 maxSelections개 저장, POV는 1개 저장
+    
     if (type === 'hmw_question') {
       const topK = resultsArr.slice(0, maxSelections)
         .map(r => r.contribution?.content?.question || r.contribution?.content)
@@ -701,7 +701,7 @@ async handleContributionSubmit(
       await this.db.setFinalSelections(roomId, { questionContent: content });
     }
 
-    // 상태 완료 처리
+    
     await this.db.setSessionState(roomId, `voting_${type}`, { ...votingState, status: 'completed' });
   } catch (error) {
     this.logger.error('Error handling ephemeral voting completion:', error);

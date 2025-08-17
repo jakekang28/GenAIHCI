@@ -12,7 +12,10 @@ const VotingComponent = ({
   onVotingComplete,
   onVotingStarted,
   showDetailedOptions = false,
-  onStartVotingClick
+  onStartVotingClick,
+  deferParentOnComplete = true,
+  resultsPrimaryActionLabel = 'Continue',
+  onResultsPrimaryAction
 }) => {
   const { socket } = useSession();
   
@@ -38,7 +41,14 @@ const VotingComponent = ({
   const [results, setResults] = useState([]);
   const [tieMessage, setTieMessage] = useState('');
   const [localVotes, setLocalVotes] = useState({}); // For predefined options voting
-
+  const [finalWinner, setFinalWinner] = useState(null);
+  const getContext = (entry) =>{
+    if(!entry) return
+    const payload = entry.contribution ?? entry;
+    const c = payload?.content
+    if (typeof c === 'string') return c;
+    return c?.statement ?? c?.question ?? '';
+  }
   // Update active contributions when contributions prop changes
   useEffect(() => {
     if (!usingPredefinedOptions) {
@@ -113,9 +123,11 @@ const VotingComponent = ({
         setVotingState('tie');
         return
       }
+      const res = data.results || [];
       setVotingState('results');
+      setFinalWinner(data.winner || res[0] || null);
       setResults(data.results || []);
-      if (onVotingComplete) {
+      if (!deferParentOnComplete &&onVotingComplete) {
         if (maxSelections > 1) {
           const topResults = (data.results || [])
           .sort((a, b) => b.vote_count - a.vote_count)
@@ -456,81 +468,234 @@ const VotingComponent = ({
   }
 
   if (votingState === 'results') {
-    const winner = results.find(r => r === results[0]); // Results are sorted by vote count
-    
+  const isMulti = type === 'hmw_question' && (maxSelections ?? 1) > 1;
+
+  const getContentText = (x) => {
+    if (!x) return '';
+    const contrib = x.contribution || x; // result 객체 또는 contribution 그대로
+    const c = contrib?.content;
+    if (typeof c === 'string') return c;
+    return c?.question || c?.statement || '';
+  };
+
+  // --- POV (단일 선택) 화면: 기존 느낌 유지 + Continue 버튼 추가 ---
+  if (!isMulti) {
+    const winnerRes = (results || [])[0] || null; // 서버에서 이미 득표수 desc로 정렬됨
+    const winnerText = getContentText(winnerRes);
+
     return (
       <div style={{ padding: 24, textAlign: 'center' }}>
         <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16, color: '#10b981' }}>
           🎉 Voting Complete!
         </h3>
-        
-        <div style={{ 
-          background: '#f0fdf4', 
-          border: '2px solid #10b981', 
-          padding: 20, 
-          borderRadius: 12, 
-          marginBottom: 20 
+
+        <div style={{
+          background: '#f0fdf4',
+          border: '2px solid #10b981',
+          padding: 20,
+          borderRadius: 12,
+          marginBottom: 20
         }}>
           <div style={{ fontSize: 18, fontWeight: 600, color: '#15803d', marginBottom: 8 }}>
             Winner!
           </div>
           <div style={{ color: '#374151' }}>
-            {winner && (typeof winner.contribution?.content === 'string' ? 
-              winner.contribution.content : 
-              winner.contribution?.content?.statement || 
-              winner.contribution?.content?.question || 
-              'Selected Option')}
+            {winnerText || 'Selected Option'}
           </div>
-          {winner && (
+          {winnerRes && (
             <div style={{ fontSize: 14, color: '#6b7280', marginTop: 8 }}>
-              {winner.vote_count} vote{winner.vote_count !== 1 ? 's' : ''}
+              {winnerRes.vote_count} vote{winnerRes.vote_count !== 1 ? 's' : ''}
             </div>
           )}
         </div>
 
         <div>
           <h4 style={{ marginBottom: 12 }}>Final Results:</h4>
-          {results.map((result, index) => (
-            <div key={index} style={{ 
-              background: index === 0 ? '#f0fdf4' : 'white', 
-              border: index === 0 ? '2px solid #10b981' : '1px solid #d1d5db', 
-              borderRadius: 8, 
-              padding: 12, 
+          {(results || []).map((result, index) => (
+            <div key={result.contribution_id || result.option_id || index} style={{
+              background: index === 0 ? '#f0fdf4' : 'white',
+              border: index === 0 ? '2px solid #10b981' : '1px solid #d1d5db',
+              borderRadius: 8,
+              padding: 12,
               marginBottom: 8,
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
             }}>
               <span style={{ fontWeight: index === 0 ? 600 : 400 }}>
-                {index === 0 ? '👑 ' : ''}Option {index + 1}
+                {index === 0 ? '👑 ' : ''}{`Option ${index + 1}`}
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ 
-                  background: '#e5e7eb', 
-                  borderRadius: 4, 
-                  height: 8, 
+                <div style={{
+                  background: '#e5e7eb',
+                  borderRadius: 4,
+                  height: 8,
                   width: 100,
                   overflow: 'hidden'
                 }}>
-                  <div style={{ 
-                    background: index === 0 ? '#10b981' : '#6b7280', 
-                    height: '100%', 
-                    width: `${(result.vote_count / results[0].vote_count) * 100}%`,
+                  <div style={{
+                    background: index === 0 ? '#10b981' : '#6b7280',
+                    height: '100%',
+                    width: `${(result.vote_count / ((results?.[0]?.vote_count || 1))) * 100}%`,
                     transition: 'width 0.5s ease'
                   }} />
                 </div>
                 <span style={{ fontWeight: 600, minWidth: 60 }}>
-                  {result.vote_count} vote{result.vote_count !== 1 ? 's' : ''} 
-                  ({Math.round((result.vote_count / results.reduce((sum, r) => sum + r.vote_count, 0)) * 100)}%)
+                  {result.vote_count} vote{result.vote_count !== 1 ? 's' : ''} (
+                  {Math.round(
+                    (result.vote_count /
+                      (results || []).reduce((sum, x) => sum + (x.vote_count || 0), 0)) * 100
+                  )}
+                  %)
                 </span>
               </div>
             </div>
           ))}
         </div>
+
+        {/* ✅ POV에서도 Continue 버튼 노출 */}
+        <div style={{ marginTop: 20 }}>
+          <button
+            onClick={() => {
+              if (!onVotingComplete) return;
+              // 부모에 단일 우승자 전달 (부모는 여기서 다음 단계로 이동)
+              onVotingComplete(winnerRes, results || []);
+            }}
+            style={{
+              background: '#10b981', color: 'white', border: 'none',
+              padding: '12px 24px', borderRadius: 8, fontWeight: 600, cursor: 'pointer'
+            }}
+          >
+            Continue
+          </button>
+        </div>
       </div>
     );
   }
 
+  // --- HMW (다중 선택) 화면: 상위 maxSelections 모두 우승자로 표기 + 👑 하이라이트 ---
+  const total = (results || []).length;
+  const topCount = Math.min((maxSelections || 3), total);
+  const winners = (results || []).slice(0, topCount);
+
+  return (
+    <div style={{ padding: 24, textAlign: 'center' }}>
+      <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16, color: '#10b981' }}>
+        🎉 Voting Complete!
+      </h3>
+
+      {/* Top K 우승자 카드 */}
+      <div
+        style={{
+          background: '#f0fdf4',
+          border: '2px solid #10b981',
+          padding: 20,
+          borderRadius: 12,
+          marginBottom: 20,
+          textAlign: 'left'
+        }}
+      >
+        <div style={{ fontSize: 18, fontWeight: 600, color: '#15803d', marginBottom: 8 }}>
+          Top {topCount} Winners
+        </div>
+
+        {winners.map((w, i) => (
+          <div
+            key={w.contribution_id || w.option_id || i}
+            style={{
+              background: 'white',
+              border: '1px solid #d1d5db',
+              borderRadius: 8,
+              padding: 12,
+              marginBottom: 10
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>👑 #{i + 1}</div>
+            <div style={{ color: '#374151' }}>{getContentText(w)}</div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>
+              {w.vote_count} vote{w.vote_count !== 1 ? 's' : ''}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 전체 결과: 상위 topCount 모두 👑 + 하이라이트 */}
+      <div>
+        <h4 style={{ marginBottom: 12 }}>Final Results:</h4>
+        {(results || []).map((r, index) => {
+          const isTop = index < topCount;
+          return (
+            <div
+              key={r.contribution_id || r.option_id || index}
+              style={{
+                background: isTop ? '#f0fdf4' : 'white',
+                border: isTop ? '2px solid #10b981' : '1px solid #d1d5db',
+                borderRadius: 8,
+                padding: 12,
+                marginBottom: 8,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}
+            >
+              <span style={{ fontWeight: isTop ? 600 : 400 }}>
+                {isTop ? '👑 ' : ''}{getContentText(r) || `Option ${index + 1}`}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  style={{
+                    background: '#e5e7eb',
+                    borderRadius: 4,
+                    height: 8,
+                    width: 100,
+                    overflow: 'hidden'
+                  }}
+                >
+                  <div
+                    style={{
+                      background: isTop ? '#10b981' : '#6b7280',
+                      height: '100%',
+                      width: `${(r.vote_count / ((results?.[0]?.vote_count || 1))) * 100}%`,
+                      transition: 'width 0.5s ease'
+                    }}
+                  />
+                </div>
+                <span style={{ fontWeight: 600, minWidth: 60 }}>
+                  {r.vote_count} vote{r.vote_count !== 1 ? 's' : ''} (
+                  {Math.round(
+                    (r.vote_count /
+                      (results || []).reduce((sum, x) => sum + (x.vote_count || 0), 0)) * 100
+                  )}
+                  %)
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ✅ HMW에도 Continue 버튼 노출 (상위 maxSelections 전달) */}
+      <div style={{ marginTop: 20 }}>
+        <button
+          onClick={() => {
+            if (!onVotingComplete) return;
+            const topContribs = winners
+              .map(w => w.contribution)
+              .filter(Boolean);
+            onVotingComplete(topContribs, results || []);
+          }}
+          style={{
+            background: '#10b981', color: 'white', border: 'none',
+            padding: '12px 24px', borderRadius: 8, fontWeight: 600, cursor: 'pointer'
+          }}
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  );
+}
+  
   return null;
 };
 

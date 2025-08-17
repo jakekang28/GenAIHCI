@@ -10,6 +10,7 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
   const [contributions, setContributions] = useState([]);
   const [phase, setPhase] = useState('create'); // types: 'create', 'voting', 'results'
   //Util Functions
+  const toArray = (x) => (Array.isArray(x) ? x : x ? [x] : []);
   const normHmw = (c) => {
     const content = typeof c?.content === 'string' ? { question: c.content } : (c?.content ?? {});
     return {
@@ -22,7 +23,7 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
   }
   const hmwKey = (x) => {
     const a = x.userId || x.authorId || x.socketId || 'u';
-    const id = x.id || x.socketId;
+    const id = x.id;
     if (id) return id;
     const ord = x.content?.order;
     if (ord != null) return `${a}::ord:${ord}`;
@@ -45,7 +46,7 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
     // Listen for contributions from other members
     const handleContributions = (data) => {
       if (data?.type !== 'hmw_question') return;
-      const incoming = Array.isArray(data?.contributions?.length ? data.contributions : data);
+      const incoming = Array.isArray(data?.contributions) ? data.contributions : toArray(data)
       if (!incoming.length) return;
       setContributions((prev) => upsertHmwByStableId(prev, incoming));
     };
@@ -107,14 +108,17 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
     };
     // Submit each question as a separate contribution
     validQuestions.forEach((question, index) => {
+      const order = index + 1;
+      const stableId = `${myUserId || socket.id}:hmw:${order}`
       const contribution = {
         ...baseMeta,
+        id: stableId,
         content :{
-          question: question,
+          question: question.trim(),
           povStatement,
           needs: needs.filter((n) => n.trim()),
           insights: insights.filter((i) => i.trim()),
-          index,
+          order,
           context: 'HMW question based on selected POV statement',
           userId: myUserId,
           socketId: socket.id,
