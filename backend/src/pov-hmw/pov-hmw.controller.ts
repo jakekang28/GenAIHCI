@@ -27,6 +27,26 @@ export class PovHmwController {
     return { success: true, session };
   }
 
+  @Get('session/:sessionId/final-selections')
+  async getFinalSelections(@Param('sessionId') sessionId: string) {
+    try {
+      const selections = await this.povHmwService.getFinalSelections(sessionId);
+      return { success: true, selections };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  @Get('session/:sessionId/ai-evaluations')
+  async getAiEvaluations(@Param('sessionId') sessionId: string) {
+    try {
+      const evaluations = await this.povHmwService.getAiEvaluations(sessionId);
+      return { success: true, evaluations };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
   @Post('pov-statement')
   async createPovStatement(@Body() povData: PovStatementDto) {
     await this.povHmwService.createPovStatement(povData);
@@ -67,11 +87,19 @@ export class PovHmwController {
   }
 
   @Post('evaluate-pov')
-  async evaluatePov(@Body() body: { statement: string; needs: string[]; insights: string[] }) {
+  async evaluatePov(@Body() body: { 
+    statement: string; 
+    needs: string[]; 
+    insights: string[];
+    sessionId?: string;
+    userId?: string;
+  }) {
     const result = await this.povHmwService.evaluatePov(
       body.statement,
       body.needs,
-      body.insights
+      body.insights,
+      body.sessionId,
+      body.userId
     );
     return { success: true, result };
   }
@@ -81,13 +109,17 @@ export class PovHmwController {
     questions: string[]; 
     needs: string[]; 
     insights: string[]; 
-    selectedPov: string 
+    selectedPov: string;
+    sessionId?: string;
+    userId?: string;
   }) {
     const results = await this.povHmwService.evaluateHmw(
       body.questions,
       body.needs,
       body.insights,
-      body.selectedPov
+      body.selectedPov,
+      body.sessionId,
+      body.userId
     );
     return { success: true, results };
   }

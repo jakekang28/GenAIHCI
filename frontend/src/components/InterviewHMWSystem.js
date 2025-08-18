@@ -33,7 +33,7 @@ const InterviewHMWSystem = () => {
   } = useLocalGuest();
 
   // Collaborative session management
-  const { sessionId, ensureJoined } = useSession();
+  const { sessionId, ensureJoined, members, socket } = useSession();
 
   // Session Management
   const [localSessionId, _setLocalSessionId] = useState(getSessionId());
@@ -102,27 +102,22 @@ const InterviewHMWSystem = () => {
     setApiError(null);
     
     try {
-      const needsText = needs
-        .filter(need => need.trim())
-        .map((need, i) => `${i + 1}. ${need}`)
-        .join('\n');
+      // Get current user info from session
+      const currentUser = members?.find(m => m.socketId === socket?.id);
+      const userId = currentUser?.userId;
       
-      const insightsText = insights
-        .filter(insight => insight.trim())
-        .map((insight, i) => `Insight ${i + 1}: ${insight}`)
-        .join('\n');
-      
-      const result = await apiService.evaluatePOVDynamic(
+      const result = await apiService.evaluatePovWithSession(
         statement,
-        needsText,
-        insightsText,
-        statement
+        needs.filter(need => need.trim()),
+        insights.filter(insight => insight.trim()),
+        sessionId,
+        userId
       );
       
       if (result.success) {
         setPovAIResult(result.result);
       } else {
-        setApiError(result.error);
+        setApiError(result.error || 'Evaluation failed');
       }
     } catch (error) {
       setApiError('Failed to connect to evaluation service');
@@ -135,38 +130,26 @@ const InterviewHMWSystem = () => {
   const evaluateHMWQuestions = async (questions) => {
     setHmwLoading(true);
     setApiError(null);
-    const results = {};
     
     try {
-      const needsText = needs
-        .filter(need => need.trim())
-        .map((need, i) => `${i + 1}. ${need}`)
-        .join('\n');
+      // Get current user info from session
+      const currentUser = members?.find(m => m.socketId === socket?.id);
+      const userId = currentUser?.userId;
       
-      const insightsText = insights
-        .filter(insight => insight.trim())
-        .map((insight, i) => `Insight ${i + 1}: ${insight}`)
-        .join('\n');
+      const result = await apiService.evaluateHmwWithSession(
+        questions,
+        needs.filter(need => need.trim()),
+        insights.filter(insight => insight.trim()),
+        selectedGroupPov,
+        sessionId,
+        userId
+      );
       
-      for (let i = 0; i < questions.length; i++) {
-        const question = questions[i];
-        
-        const result = await apiService.evaluateHMWDynamic(
-          `${i + 1}. ${question}`,
-          needsText,
-          insightsText,
-          selectedGroupPov
-        );
-        
-        if (result.success) {
-          results[i] = result.result;
-        } else {
-          setApiError(result.error);
-          break;
-        }
+      if (result.success) {
+        setHmwAIResults(result.results);
+      } else {
+        setApiError(result.error || 'Evaluation failed');
       }
-      
-      setHmwAIResults(results);
     } catch (error) {
       setApiError('Failed to connect to evaluation service');
       console.error('HMW evaluation error:', error);

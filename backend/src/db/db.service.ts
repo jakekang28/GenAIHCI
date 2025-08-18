@@ -405,6 +405,42 @@ export class DbService {
     return (data || []) as UserContributionRow[];
   }
 
+  /** Mark contributions as selected (for final team selections) */
+  async markContributionsAsSelected(contributionIds: string[]): Promise<void> {
+    if (contributionIds.length === 0) return;
+    
+    // Update each contribution individually to add is_selected flag
+    for (const id of contributionIds) {
+      // First get the current content
+      const { data: current, error: fetchError } = await this.client
+        .from('user_contributions')
+        .select('content')
+        .eq('id', id)
+        .single();
+      
+      if (fetchError) {
+        this.logger.error(`Failed to fetch contribution ${id}:`, fetchError);
+        continue;
+      }
+      
+      // Update content with is_selected flag
+      const updatedContent = {
+        ...current.content,
+        is_selected: true
+      };
+      
+      const { error: updateError } = await this.client
+        .from('user_contributions')
+        .update({ content: updatedContent })
+        .eq('id', id);
+      
+      if (updateError) {
+        this.logger.error(`Failed to update contribution ${id}:`, updateError);
+        throw updateError;
+      }
+    }
+  }
+
   // ============================================================================
   // INTERVIEW SPECIFIC METHODS
   // ============================================================================

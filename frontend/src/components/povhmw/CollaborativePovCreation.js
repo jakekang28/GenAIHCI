@@ -336,6 +336,24 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
           onVotingComplete={(winner, results) => {
             const text = extractWinnerText(winner);
             if (!text) return;
+            
+            // Send final selection to backend
+            if (socket && winner?.id) {
+              // Ensure we're using a valid UUID
+              const winnerId = winner.id || winner.databaseId;
+              if (winnerId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(winnerId)) {
+                socket.emit('room:final_selection', {
+                  roomId: sessionId,
+                  type: 'pov_statement',
+                  selectedContent: text,
+                  selectedContributionIds: [winnerId]
+                });
+                console.log('POV final selection sent with database ID:', winnerId);
+              } else {
+                console.warn('Invalid UUID for POV selection:', winnerId);
+              }
+            }
+            
             setPovWinner(text);
             onContinue(text);
           }}

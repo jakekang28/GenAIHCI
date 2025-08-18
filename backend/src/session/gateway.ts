@@ -32,6 +32,7 @@ type Contribution = {
   content: any;
   isSelected: boolean;
   timestamp: string;
+  frontendId?: string; // Added for frontend state management
 };
 
 type HostDecision = {
@@ -359,9 +360,9 @@ async handleContributionSubmit(
       contribution.id = dbContribution?.id; 
     }
 
+    // Set frontend ID for state management (separate from database ID)
     if (type === 'pov_statement') {
-      
-      contribution.id = `${userKey}:pov`;
+      contribution.frontendId = `${userKey}:pov`;
     } else if (type === 'hmw_question') {
       let order = Number(content?.order);
       if (!Number.isInteger(order) || order < 1 || order > 3) {
@@ -375,12 +376,13 @@ async handleContributionSubmit(
         order = [1, 2, 3].find(o => !used.has(o)) ?? 3;
       }
       contribution.content = { ...(contribution.content || {}), order };
-      contribution.id = `${userKey}:hmw:${order}`; 
+      contribution.frontendId = `${userKey}:hmw:${order}`; 
     } else {
-      
-      contribution.id = contribution.id || randomUUID();
+      contribution.frontendId = contribution.frontendId || randomUUID();
     }
-    roomMap.set(contribution.id!, contribution);
+    
+    // Use frontend ID for room map (for WebSocket state management)
+    roomMap.set(contribution.frontendId!, contribution);
 
 
     socket.emit('room:contribution:ack', { ok: true, contribution });
@@ -391,6 +393,65 @@ async handleContributionSubmit(
     socket.emit('room:error', { message: 'Failed to submit contribution' });
   }
 }
+
+  /** Handle final team selections after voting */
+  @SubscribeMessage('room:final_selection')
+  async handleFinalSelection(
+    @MessageBody() body: {
+      roomId: string;
+      type: 'pov_statement' | 'hmw_question';
+      selectedContent: string | string[];
+      selectedContributionIds?: string[];
+    },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    const { roomId, type, selectedContent, selectedContributionIds } = body || {};
+    
+    const member = this.rooms.get(roomId)?.get(socket.id);
+    if (!member) {
+      socket.emit('room:error', { message: 'You are not a member of this room' });
+      return;
+    }
+
+    try {
+      // Update session with final selections
+      if (type === 'pov_statement') {
+        await this.db.setFinalSelections(roomId, {
+          povContent: selectedContent as string
+        });
+      } else if (type === 'hmw_question') {
+        await this.db.setFinalSelections(roomId, {
+          hmwContents: selectedContent as string[]
+        });
+      }
+
+      // Mark contributions as selected in the database
+      // Note: selectedContributionIds should be database UUIDs, not frontend IDs
+      if (selectedContributionIds && selectedContributionIds.length > 0) {
+        // Filter out any non-UUID IDs to prevent database errors
+        const validUuidIds = selectedContributionIds.filter(id => 
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+        );
+        
+        if (validUuidIds.length > 0) {
+          await this.db.markContributionsAsSelected(validUuidIds);
+        } else {
+          this.logger.warn('No valid UUIDs found in selectedContributionIds:', selectedContributionIds);
+        }
+      }
+
+      // Broadcast final selection to all room members
+      this.server.to(roomId).emit('room:final_selection_complete', {
+        type,
+        selectedContent,
+        selectedContributionIds
+      });
+
+    } catch (error) {
+      this.logger.error('handleFinalSelection error', error);
+      socket.emit('room:error', { message: 'Failed to save final selection' });
+    }
+  }
 
   /** Host decision: Change room stage */
   @SubscribeMessage('room:host:change_stage')

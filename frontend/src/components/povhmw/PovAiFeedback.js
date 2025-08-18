@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowLeft, ChevronRight, Star } from 'lucide-react';
 import LoadingPage from '../LoadingPage';
 import { parsePovAIFeedback, extractAIContent } from '../shared/utils';
+import { useSession } from '../../providers/SessionProvider';
 
 const PovAiFeedback = ({ 
   selectedGroupPov, 
@@ -14,6 +15,8 @@ const PovAiFeedback = ({
   onContinue,
   onRetryEvaluation 
 }) => {
+  const { sessionId, members } = useSession();
+  
   if (povLoading) {
     return (
       <LoadingPage
@@ -88,11 +91,13 @@ const PovAiFeedback = ({
                         </div>
                       </div>
                     </div>
-                    <div className="bg-indigo-50 p-4 rounded-lg">
-                      <p className="text-indigo-800 break-words overflow-hidden">
-                        {rubric.reason}
-                      </p>
-                    </div>
+                    {rubric.reason && (
+                      <div className="bg-indigo-50 p-4 rounded-lg">
+                        <p className="text-indigo-800 break-words overflow-hidden">
+                          {rubric.reason}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

@@ -87,6 +87,95 @@ class ApiService {
       };
     }
   }
+
+  // NEW: POV/HMW EVALUATION WITH SESSION CONTEXT
+  /**
+   * Evaluate POV statement with session context for database storage
+   * @param {string} statement - POV statement to evaluate
+   * @param {string[]} needs - User needs array
+   * @param {string[]} insights - User insights array
+   * @param {string} sessionId - Session ID for database storage
+   * @param {string} userId - User ID for database storage
+   * @returns {Promise<Object>} - Success status and AI evaluation result
+   */
+  async evaluatePovWithSession(statement, needs, insights, sessionId, userId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/pov-hmw/evaluate-pov`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          statement,
+          needs,
+          insights,
+          sessionId,
+          userId
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return {
+        success: true,
+        result: data.result,
+      };
+    } catch (error) {
+      console.error('Error evaluating POV with session context:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Evaluate HMW questions with session context for database storage
+   * @param {string[]} questions - HMW questions array
+   * @param {string[]} needs - User needs array
+   * @param {string[]} insights - User insights array
+   * @param {string} selectedPov - Selected POV statement
+   * @param {string} sessionId - Session ID for database storage
+   * @param {string} userId - User ID for database storage
+   * @returns {Promise<Object>} - Success status and AI evaluation results
+   */
+  async evaluateHmwWithSession(questions, needs, insights, selectedPov, sessionId, userId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/pov-hmw/evaluate-hmw`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          questions,
+          needs,
+          insights,
+          selectedPov,
+          sessionId,
+          userId
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return {
+        success: true,
+        results: data.results,
+      };
+    } catch (error) {
+      console.error('Error evaluating HMW with session context:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
   async personaRetrieval(tag) {
     try{
       const response = await fetch(`${API_BASE_URL}/llm/get-persona?tag=${tag}`, {

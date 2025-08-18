@@ -138,6 +138,24 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
     console.log('HMW voting complete:', selectedQuestions);
     // selectedQuestions -> array of the top 3 voted HMW questions
     const texts = (selectedQuestions || []).map((q) => q?.content?.question || q?.content || '');
+    
+    // Send final selection to backend
+    if (socket && selectedQuestions && selectedQuestions.length > 0) {
+      // Use database ID if available, otherwise skip this contribution
+      const selectedIds = selectedQuestions
+        .map(q => q.id || q.databaseId) // Try both id and databaseId
+        .filter(id => id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+      
+      console.log('Selected database IDs for final selection:', selectedIds);
+      
+      socket.emit('room:final_selection', {
+        roomId: sessionId,
+        type: 'hmw_question',
+        selectedContent: texts,
+        selectedContributionIds: selectedIds
+      });
+    }
+    
     onContinue(texts);
   };
 

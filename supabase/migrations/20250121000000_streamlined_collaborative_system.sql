@@ -314,6 +314,7 @@ CREATE POLICY "Allow all operations" ON public.pov_hmw_session_data FOR ALL USIN
 
 COMMENT ON TABLE public.sessions IS 'Main collaborative sessions/rooms. Stores final team selections directly.';
 COMMENT ON TABLE public.user_contributions IS 'Individual student inputs: questions, POV statements, HMW questions, etc.';
+COMMENT ON COLUMN public.user_contributions.content IS 'JSONB content structure. Can include is_selected flag for final team selections.';
 COMMENT ON TABLE public.ai_evaluations IS 'All AI feedback and scoring for learning assessment.';
 COMMENT ON TABLE public.session_state IS 'Ephemeral collaboration state (voting progress, etc.) - not persisted long-term.';
 COMMENT ON TABLE public.interview_transcripts IS 'Interview conversation records for later analysis.';

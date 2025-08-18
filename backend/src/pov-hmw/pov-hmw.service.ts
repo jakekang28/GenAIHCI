@@ -12,6 +12,70 @@ export class PovHmwService {
     private readonly db: DbService
   ) {}
 
+  /** Parse AI evaluation response to extract scores */
+  private parseAiEvaluationScores(aiResponse: any): any {
+    try {
+      // Extract content from LangChain response
+      let content = '';
+      if (aiResponse?.content) {
+        content = aiResponse.content;
+      } else if (typeof aiResponse === 'string') {
+        content = aiResponse;
+      } else {
+        this.logger.warn('Unable to extract content from AI response');
+        return null;
+      }
+
+      // Parse scores from content
+      const scores: any = {};
+      const lines = content.split('\n');
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        
+        // Look for patterns like "Actionable: 4" or "Actionable - 4" or "Actionable 4"
+        if (trimmedLine.includes(':')) {
+          const [category, scoreText] = trimmedLine.split(':').map(s => s.trim());
+          const scoreMatch = scoreText.match(/(\d+)/);
+          if (scoreMatch) {
+            scores[category] = parseInt(scoreMatch[1]);
+          }
+        } else if (trimmedLine.includes('-')) {
+          const [category, scoreText] = trimmedLine.split('-').map(s => s.trim());
+          const scoreMatch = scoreText.match(/(\d+)/);
+          if (scoreMatch) {
+            scores[category] = parseInt(scoreMatch[1]);
+          }
+        } else {
+          // Look for patterns like "Actionable 4" (no separator)
+          const scoreMatch = trimmedLine.match(/([A-Za-z\s]+)\s*(\d+)/);
+          if (scoreMatch) {
+            const category = scoreMatch[1].trim();
+            const score = parseInt(scoreMatch[2]);
+            if (category && !isNaN(score)) {
+              scores[category] = score;
+            }
+          }
+        }
+      }
+
+      // Add metadata
+      scores.parsedContent = content;
+      scores.parsedAt = new Date().toISOString();
+      scores.totalScore = Object.values(scores)
+        .filter(val => typeof val === 'number')
+        .reduce((sum: number, score: number) => sum + score, 0);
+      
+      // Log what we found
+      this.logger.log(`Parsed scores: ${JSON.stringify(scores)}`);
+      
+      return scores;
+    } catch (error) {
+      this.logger.error('Error parsing AI evaluation scores:', error);
+      return null;
+    }
+  }
+
   /** Create a new POV/HMW collaborative session */
   async createSession(hostUserId: string, sessionData: PovHmwSessionDto): Promise<PovHmwSessionResponseDto> {
     try {
@@ -65,6 +129,42 @@ export class PovHmwService {
       };
     } catch (error) {
       this.logger.error('getSession error', error);
+      throw error;
+    }
+  }
+
+  /** Get final team selections for session */
+  async getFinalSelections(sessionId: string): Promise<{
+    povContent?: string;
+    hmwContents?: string[];
+  } | null> {
+    try {
+      const session = await this.db.getSession(sessionId);
+      return {
+        povContent: session.selected_pov_content,
+        hmwContents: session.selected_hmw_contents
+      };
+    } catch (error) {
+      this.logger.error('getFinalSelections error', error);
+      throw error;
+    }
+  }
+
+  /** Get AI evaluations with parsed scores for session */
+  async getAiEvaluations(sessionId: string): Promise<{
+    povEvaluations: any[];
+    hmwEvaluations: any[];
+  } | null> {
+    try {
+      const povEvaluations = await this.db.getAiEvaluations(sessionId, 'pov_feedback');
+      const hmwEvaluations = await this.db.getAiEvaluations(sessionId, 'hmw_feedback');
+      
+      return {
+        povEvaluations,
+        hmwEvaluations
+      };
+    } catch (error) {
+      this.logger.error('getAiEvaluations error', error);
       throw error;
     }
   }
@@ -217,18 +317,25 @@ export class PovHmwService {
 
       const result = await this.llmService.runDynamicPrompt('pov.txt', dynamicData);
       
+      // Parse AI response to extract scores
+      const processedScores = this.parseAiEvaluationScores(result);
+      
       // Save AI evaluation if session is provided
       if (sessionId) {
+        this.logger.log(`Saving POV AI evaluation for session: ${sessionId}, user: ${createdBy}`);
         await this.db.saveAiEvaluation(
           sessionId,
           'pov_feedback',
           { statement, needs, insights },
           result,
           { needs, insights }, // input metadata
-          undefined, // processed scores
+          processedScores, // parsed scores
           'AI POV Evaluation', // feedback summary
           createdBy
         );
+        this.logger.log(`POV AI evaluation saved successfully for session: ${sessionId}`);
+      } else {
+        this.logger.log('No sessionId provided, skipping database storage for POV evaluation');
       }
       
       return result;
@@ -259,18 +366,25 @@ export class PovHmwService {
         const result = await this.llmService.runDynamicPrompt('hmw.txt', dynamicData);
         results.push(result);
         
+        // Parse AI response to extract scores
+        const processedScores = this.parseAiEvaluationScores(result);
+        
         // Save AI evaluation if session is provided
         if (sessionId) {
+          this.logger.log(`Saving HMW AI evaluation for session: ${sessionId}, user: ${createdBy}, question ${i + 1}`);
           await this.db.saveAiEvaluation(
             sessionId,
             'hmw_feedback',
             { question, needs, insights, selectedPov },
             result,
             { needs, insights, selectedPov }, // input metadata
-            undefined, // processed scores
+            processedScores, // parsed scores
             `AI HMW Evaluation for Question ${i + 1}`, // feedback summary
             createdBy
           );
+          this.logger.log(`HMW AI evaluation saved successfully for session: ${sessionId}, question ${i + 1}`);
+        } else {
+          this.logger.log(`No sessionId provided, skipping database storage for HMW evaluation question ${i + 1}`);
         }
       }
       

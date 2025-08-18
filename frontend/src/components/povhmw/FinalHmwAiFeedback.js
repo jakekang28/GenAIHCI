@@ -1,7 +1,8 @@
 import React from 'react';
 import { ArrowLeft, Star } from 'lucide-react';
 import LoadingPage from '../LoadingPage';
-import { extractAIContent } from '../shared/utils';
+import { extractAIContent, parseHmwAIFeedback } from '../shared/utils';
+import { useSession } from '../../providers/SessionProvider';
 
 const FinalHmwAiFeedback = ({ 
   selectedFinalHmwQuestions, 
@@ -13,6 +14,8 @@ const FinalHmwAiFeedback = ({
   onComplete,
   onRetryEvaluation 
 }) => {
+  const { sessionId, members } = useSession();
+  
   if (hmwLoading) {
     return (
       <LoadingPage
@@ -72,6 +75,11 @@ const FinalHmwAiFeedback = ({
         <div className="space-y-8">
           {selectedFinalHmwQuestions.map((question, questionIndex) => {
             const aiResult = hmwAIResults[questionIndex];
+            const parsedFeedback = parseHmwAIFeedback(aiResult);
+            
+            // Debug logging
+            console.log(`Question ${questionIndex + 1} AI Result:`, aiResult);
+            console.log(`Question ${questionIndex + 1} Parsed Feedback:`, parsedFeedback);
 
             return (
               <div key={questionIndex} className="bg-white rounded-2xl shadow-xl p-8">
@@ -95,9 +103,9 @@ const FinalHmwAiFeedback = ({
                       <div className="flex-1">
                         <h4 className="font-semibold text-emerald-800 mb-3">AI Evaluation Results</h4>
                         
-                        {Array.isArray(aiResult) ? (
+                        {parsedFeedback ? (
                           <div className="space-y-4">
-                            {aiResult.map((rubric) => (
+                            {parsedFeedback.map((rubric) => (
                               <div key={rubric.id} className="border border-emerald-200 rounded-lg p-4">
                                 <div className="flex items-center justify-between mb-3">
                                   <h5 className="text-lg font-semibold text-emerald-800">{rubric.title}</h5>
@@ -113,11 +121,13 @@ const FinalHmwAiFeedback = ({
                                     </div>
                                   </div>
                                 </div>
-                                <div className="bg-emerald-100 p-3 rounded-lg">
-                                  <p className="text-emerald-800 text-sm leading-relaxed">
-                                    {rubric.reason}
-                                  </p>
-                                </div>
+                                {rubric.reason && (
+                                  <div className="bg-emerald-100 p-3 rounded-lg">
+                                    <p className="text-emerald-800 text-sm leading-relaxed">
+                                      {rubric.reason}
+                                    </p>
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
