@@ -190,7 +190,7 @@ const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue })
           {/* Question Creation Form */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
-              <Lightbulb className="h-6 w-6 text-yellow-500 mr-2" />
+              <Lightbulb className="h-6 w-6 text-blue-600 mr-2" />
               Create Your Interview Question
             </h2>
             
@@ -247,7 +247,7 @@ const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue })
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                     votingStarted 
                       ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
-                      : 'bg-green-600 text-white hover:bg-green-700'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
                   }`}
                 >
                   {votingStarted ? 'Voting Started' : 'Start Voting'}
@@ -267,8 +267,8 @@ const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue })
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 p-6">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-4">
-            🗳️ Vote for the Best Interview Question
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">
+            Vote for the Best Interview Question
           </h1>
           <p className="text-gray-600">
             Choose the question that will lead to the most insightful interview

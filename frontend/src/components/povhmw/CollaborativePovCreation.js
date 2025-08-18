@@ -318,11 +318,11 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 p-6">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-4">
-            🗳️ Vote for the Best POV Statement
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">
+            Vote for the Best POV Statement
           </h1>
           <p className="text-gray-600">
-            Choose the POV statement that best captures your team's insights and frames the design challenge
+            Choose the POV statement that best captures the user's needs and insights
           </p>
         </div>
 
