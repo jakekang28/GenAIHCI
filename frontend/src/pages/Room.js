@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSession } from '../providers/SessionProvider';
 import { Users, Share2, Play, Wifi, WifiOff, ArrowLeft } from 'lucide-react';
-
+import ConfirmButton from '../components/shared/ConfirmButton';
 export default function Room() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
@@ -13,7 +13,8 @@ export default function Room() {
   const {
     connected, mySocketId,
     members,
-    ensureJoined, 
+    ensureJoined,
+    socket 
   } = useSession();
 
   useEffect(() => {
@@ -54,14 +55,22 @@ export default function Room() {
       return;
     }
 
-    // ✅ 이미 같은 세션이면 아무 것도 안 하도록 보장
     ensureJoined(sessionId, { 
       userId: guestData.guestUserId, 
       userName: guestData.guestName || 'Guest', 
       role: 'member' 
     });
   }, [sessionId, ensureJoined]);
-
+  useEffect(() => {
+    if (!socket) return;
+    const handleStarted = (data) => {
+      if (!data || data.roomId !== sessionId) return;
+      const to = data.path || `/app/${sessionId}`;
+      navigate(to);
+    };
+    socket.on('room:session_started', handleStarted);
+    return () => socket.off('room:session_started', handleStarted);
+  }, [socket, sessionId, navigate]);
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6 flex items-center justify-center">
       <div className="max-w-4xl mx-auto w-full">
@@ -198,13 +207,19 @@ export default function Room() {
             <p className="text-gray-600 mb-6">
               Begin your collaborative learning session with your team members
             </p>
-            <button
+            {/* <button
               onClick={() => navigate(`/app/${sessionId}`)}
               className="bg-teal-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-teal-700 transition-all duration-200 flex items-center justify-center mx-auto hover:transform hover:scale-105"
             >
               <Play className="w-5 h-5 mr-2" />
               Start Learning Session
-            </button>
+            </button> */}
+            <ConfirmButton
+            roomId={sessionId}
+            checkpointKey="room:start"
+            onHostContinue={() => navigate(`/app/${sessionId}`)}
+            className="flex justify-center"
+          />
           </div>
         </div>
       </div>

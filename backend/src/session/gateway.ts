@@ -58,13 +58,26 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
   private roomStages = new Map<string, RoomStage>();
   private roomContributions = new Map<string, Map<string, Contribution>>();
   private hostDecisions = new Map<string, HostDecision[]>();
-  
+  private roomReady = new Map<string, Map<string, Set<string>>>(); 
   constructor(private readonly db: DbService) {}
 
   handleConnection(socket: Socket) {
     this.logger.log(`Socket connected: ${socket.id}`);
   }
-
+  private getReadySet(roomId: string, checkpoint: string): Set<string> {
+    if (!this.roomReady.has(roomId)) this.roomReady.set(roomId, new Map());
+    const byCp = this.roomReady.get(roomId)!;
+    if (!byCp.has(checkpoint)) byCp.set(checkpoint, new Set());
+    return byCp.get(checkpoint)!;
+  }
+  private broadcastReady(roomId: string, checkpoint: string) {
+    const set = Array.from(this.getReadySet(roomId, checkpoint));
+    this.server.to(roomId).emit('room:ready_progress', {
+      roomId,
+      checkpoint,
+      readyUserIds: set,
+    });
+  }
   // Room helper methods
   private getRoomMembers(roomId: string): RoomMember[] {
     return Array.from(this.rooms.get(roomId)?.values() ?? []);
@@ -89,7 +102,28 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
     
     return result;
   }
-  
+  @SubscribeMessage('room:start_session')
+    handleStartSession(
+    @MessageBody() body: { roomId: string; checkpoint?: string; path?: string },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    const roomId = body?.roomId;
+    if (!roomId) return;
+
+    const member = this.rooms.get(roomId)?.get(socket.id);
+    if (!member || !member.isHost) {
+      socket.emit('room:error', { message: 'Only host can start the session' });
+      return;
+    }
+
+    this.server.to(roomId).emit('room:session_started', {
+      roomId,
+      checkpoint: body?.checkpoint || 'room:start',
+      path: body?.path || `/app/${roomId}`,
+      startedBy: member.userId,
+      startedAt: new Date().toISOString(),
+    });
+  }
   private getRoomStage(roomId: string): RoomStage {
     return this.roomStages.get(roomId) ?? 'setup';
   }
@@ -504,7 +538,56 @@ async handleContributionSubmit(
       socket.emit('room:error', { message: 'Failed to change room stage' });
     }
   }
+  @SubscribeMessage('room:ready:confirm')
+handleReadyConfirm(
+  @MessageBody() body: { roomId: string; checkpoint?: string; userId?: string },
+  @ConnectedSocket() socket: Socket
+) {
+  const roomId = body?.roomId;
+  const checkpoint = body?.checkpoint || 'room:start';
+  if (!roomId) return;
 
+  // socket으로 실제 userId 확인 (신뢰 보강)
+  const member = this.rooms.get(roomId)?.get(socket.id);
+  const userId = member?.userId || body?.userId;
+  if (!userId) return;
+
+  this.getReadySet(roomId, checkpoint).add(userId);
+  this.broadcastReady(roomId, checkpoint);
+}
+
+@SubscribeMessage('room:ready:revoke')
+handleReadyRevoke(
+  @MessageBody() body: { roomId: string; checkpoint?: string; userId?: string },
+  @ConnectedSocket() socket: Socket
+) {
+  const roomId = body?.roomId;
+  const checkpoint = body?.checkpoint || 'room:start';
+  if (!roomId) return;
+
+  const member = this.rooms.get(roomId)?.get(socket.id);
+  const userId = member?.userId || body?.userId;
+  if (!userId) return;
+
+  this.getReadySet(roomId, checkpoint).delete(userId);
+  this.broadcastReady(roomId, checkpoint);
+}
+
+@SubscribeMessage('room:ready:sync')
+handleReadySync(
+  @MessageBody() body: { roomId: string; checkpoint?: string },
+  @ConnectedSocket() socket: Socket
+) {
+  const roomId = body?.roomId;
+  const checkpoint = body?.checkpoint || 'room:start';
+  if (!roomId) return;
+  const set = Array.from(this.getReadySet(roomId, checkpoint));
+  socket.emit('room:ready_progress', {
+    roomId,
+    checkpoint,
+    readyUserIds: set,
+  });
+}
   /** Start voting session for contributions (long-term) */
   @SubscribeMessage('room:start_voting')
   async handleStartVoting(
