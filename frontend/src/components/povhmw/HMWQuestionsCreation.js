@@ -16,7 +16,7 @@ const HMWQuestionsCreation = ({ needs, insights, povStatement, onBack, onContinu
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 to-pink-100 p-6 flex items-center justify-center">
       <div className="max-w-4xl mx-auto w-full">
-        <div className="flex items-center mb-8">
+        {/* <div className="flex items-center mb-8">
           <button 
             onClick={onBack}
             className="flex items-center text-gray-600 hover:text-gray-800 transition-all duration-200 hover:transform hover:translate-x-1"
@@ -24,7 +24,7 @@ const HMWQuestionsCreation = ({ needs, insights, povStatement, onBack, onContinu
             <ArrowLeft className="w-5 h-5 mr-2" />
             Back to POV Feedback
           </button>
-        </div>
+        </div> */}
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-6">Create How Might We Questions</h1>

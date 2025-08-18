@@ -29,7 +29,7 @@ const FinalHmwAiFeedback = ({
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-cyan-100 p-6">
       <div className="max-w-6xl mx-auto w-full">
-        <div className="flex items-center mb-8">
+        {/* <div className="flex items-center mb-8">
           <button 
             onClick={onBack}
             className="flex items-center text-gray-600 hover:text-gray-800 transition-colors"
@@ -37,7 +37,7 @@ const FinalHmwAiFeedback = ({
             <ArrowLeft className="w-5 h-5 mr-2" />
             Back to Group Selection
           </button>
-        </div>
+        </div> */}
 
         <div className="bg-white rounded-2xl shadow-xl p-8 mb-6">
           <h1 className="text-3xl font-bold text-gray-800 mb-4">AI Evaluation of Final HMW Questions</h1>

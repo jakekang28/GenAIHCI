@@ -223,16 +223,18 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <button
+          {/* <button
             onClick={onBack}
             className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors"
           >
             <ArrowLeft className="h-5 w-5" />
             <span>Back</span>
-          </button>
+          </button> */}
 
           <div className="text-right">
             <p className="text-sm text-gray-600">Room: {sessionId?.slice(-6)?.toUpperCase()}</p>
+          </div>
+          <div>
             <p className="text-sm text-purple-600 font-medium">{members.length} members</p>
           </div>
         </div>

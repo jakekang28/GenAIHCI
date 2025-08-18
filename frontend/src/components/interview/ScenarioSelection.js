@@ -11,25 +11,13 @@ const ScenarioSelection = ({ onBack, onContinue, onPersonaSelection }) => {
       onContinue(selectedScenario);
     }
   };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center mb-8 slide-in-left">
-          <button 
-            onClick={onBack}
-            className="flex items-center text-gray-600 hover:text-gray-800 transition-all duration-200 hover:transform hover:translate-x-1"
-          >
-            <ArrowLeft className="w-5 h-5 mr-2" />
-            Back to Home
-          </button>
-        </div>
-        
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-800 mb-4">Choose Your Scenario & Persona</h1>
           <p className="text-xl text-gray-600">Select a design scenario and the persona you'll be working with</p>
-        </div>
+        </div>``
         
         {/* Scenario Cards */}
         <div className="grid lg:grid-cols-2 gap-8 mb-12 fade-in">

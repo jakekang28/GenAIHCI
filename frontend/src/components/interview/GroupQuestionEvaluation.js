@@ -16,23 +16,12 @@ const GroupQuestionEvaluation = ({ prePlannedQuestion, selectedScenario, onBack,
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-teal-100 p-6 flex items-center justify-center">
       <div className="max-w-5xl mx-auto w-full">
-        <div className="flex items-center mb-8 slide-in-left">
-          <button 
-            onClick={onBack}
-            className="flex items-center text-gray-600 hover:text-gray-800 transition-all duration-200 hover:transform hover:translate-x-1"
-          >
-            <ArrowLeft className="w-5 h-5 mr-2" />
-            Back to Question Creation
-          </button>
-        </div>
-
         <div className="bg-white rounded-2xl shadow-xl p-8 fade-in">
           <h1 className="text-3xl font-bold text-gray-800 mb-6">Group Question Evaluation</h1>
           <p className="text-gray-600 mb-8">
             Review all the questions from your group members and select the best one to use in the interview session. 
             Consider which question will help uncover the most valuable insights about the user's experience.
           </p>
-
           <div className="mb-6 p-4 bg-teal-50 rounded-lg border border-teal-200">
             <div className="flex items-center mb-3">
               <Users className="w-5 h-5 text-teal-600 mr-2" />

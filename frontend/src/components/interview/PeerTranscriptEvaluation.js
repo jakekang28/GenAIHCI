@@ -230,25 +230,13 @@ const PeerTranscriptEvaluation = ({
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 p-6 flex items-center justify-center">
       <div className="max-w-6xl mx-auto w-full">
-        <div className="flex items-center mb-8">
-          <button 
-            onClick={onBack}
-            className="flex items-center text-gray-600 hover:text-gray-800 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 mr-2" />
-            Back to Transcript
-          </button>
-        </div>
-
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-6">Interview Transcripts Review</h1>
           <p className="text-gray-600 mb-4">
             Review all available interview transcripts. Compare different approaches to follow-up questions 
             and note what techniques were most effective.
           </p>
-          
-
-
+        
           <div className="space-y-6">
             {processedTranscripts.map((transcript, index) => (
               <div 

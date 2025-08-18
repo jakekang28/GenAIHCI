@@ -170,16 +170,10 @@ const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue })
         <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <button
-            onClick={onBack}
-            className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors"
-          >
-            <ArrowLeft className="h-5 w-5" />
-            <span>Back</span>
-          </button>
-          
           <div className="text-right">
             <p className="text-sm text-gray-600">Room: {sessionId?.slice(-6)?.toUpperCase()}</p>
+          </div>
+          <div>
             <p className="text-sm text-blue-600 font-medium">{members.length} members</p>
           </div>
         </div>
@@ -192,7 +186,6 @@ const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue })
             <p className="text-blue-700 text-sm leading-relaxed">{selectedScenario?.description}</p>
           </div>
         </div>
-
         <div className="grid md:grid-cols-2 gap-8">
           {/* Question Creation Form */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -214,7 +207,6 @@ const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue })
                   disabled={hasSubmitted}
                 />
               </div>
-
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                 <h4 className="font-medium text-amber-800 mb-2">💡 Tips for Good Questions:</h4>
                 <ul className="text-sm text-amber-700 space-y-1">
