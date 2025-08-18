@@ -189,7 +189,12 @@ const InterviewHMWSystem = () => {
     if (currentStep === 'post-interview-evaluation' && qaHistory.length > 0) {
       const qna = buildQna(qaHistory);
       setLoading(true);
-      apiService.postInterview(qna, selectedScenario.tag)
+      
+      // Get current user info from session
+      const currentUser = members?.find(m => m.socketId === socket?.id);
+      const userId = currentUser?.userId;
+      
+      apiService.postInterview(qna, selectedScenario.tag, sessionId, userId)
         .then(data => {
           setAiScoreFeedback(data.result);
           setLoading(false);
@@ -199,7 +204,7 @@ const InterviewHMWSystem = () => {
           setLoading(false);
         });
     }
-  }, [currentStep, qaHistory, selectedScenario]);
+  }, [currentStep, qaHistory, selectedScenario, sessionId, members, socket]);
 
   // POV evaluation trigger
   useEffect(() => {

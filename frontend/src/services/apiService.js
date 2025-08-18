@@ -278,7 +278,7 @@ class ApiService {
       throw err; 
     }
   }
-  async postInterview(qna, persona){
+  async postInterview(qna, persona, sessionId, userId){
    try{
       const response = await fetch(`${API_BASE_URL}/llm/eval-interview?tag=${persona}`, {
         method : 'POST',
@@ -286,7 +286,9 @@ class ApiService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          qnas : qna
+          qnas : qna,
+          sessionId: sessionId,
+          userId: userId
         }),
       })
       if (!response.ok) {  

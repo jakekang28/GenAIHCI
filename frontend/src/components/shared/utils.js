@@ -110,3 +110,61 @@ export const parseHmwAIFeedback = (aiResponse) => {
     return null;
   }
 };
+
+// Parse pre-interview question evaluation feedback
+export const parsePreInterviewFeedback = (aiResponse) => {
+  if (!aiResponse) return null;
+  
+  try {
+    const content = extractAIContent(aiResponse);
+    if (!content) return null;
+    
+    // Pre-interview feedback is typically already parsed as JSON
+    // but we can add additional parsing if needed
+    if (typeof content === 'object') {
+      return content;
+    }
+    
+    // If it's a string, try to parse it
+    try {
+      return JSON.parse(content);
+    } catch (e) {
+      // If parsing fails, return the raw content
+      return { rawContent: content };
+    }
+  } catch (error) {
+    console.error('Error parsing pre-interview feedback:', error);
+    return null;
+  }
+};
+
+// Parse post-interview evaluation feedback
+export const parsePostInterviewFeedback = (aiResponse) => {
+  if (!aiResponse) return null;
+  
+  try {
+    const content = extractAIContent(aiResponse);
+    if (!content) return null;
+    
+    // Post-interview feedback is typically already parsed as an array of rubrics
+    if (Array.isArray(content)) {
+      return content;
+    }
+    
+    // If it's a string, try to parse it
+    try {
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch (e) {
+      // If parsing fails, return the raw content
+      return { rawContent: content };
+    }
+    
+    return content;
+  } catch (error) {
+    console.error('Error parsing post-interview feedback:', error);
+    return null;
+  }
+};

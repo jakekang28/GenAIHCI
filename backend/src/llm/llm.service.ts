@@ -154,6 +154,24 @@ export class LangchainService implements OnModuleInit {
       throw e;
     }
     
+    // Store AI evaluation in database
+    try {
+      await this.db.saveAiEvaluation(
+        sessionId,
+        'pre_question_eval',
+        { question: dto.question, persona: dto.persona },
+        result,
+        { persona: dto.persona, scenarioTag: dto.scenarioTag }, // input metadata
+        parsed, // processed scores
+        'AI Pre-Interview Question Evaluation', // feedback summary
+        dto.guestUserId
+      );
+      console.log(`Pre-interview AI evaluation saved successfully for session: ${sessionId}`);
+    } catch (error) {
+      console.error('Failed to save pre-interview AI evaluation:', error);
+      // Don't throw error - continue with the response
+    }
+    
     console.log("----Chat History---")
     console.log(this.memory.chatHistory)
     return {sessionId, eval : parsed}         
@@ -217,7 +235,7 @@ export class LangchainService implements OnModuleInit {
     })
     return prompt
   }
-  async postEval(qnas : Qna[]){
+  async postEval(qnas : Qna[], sessionId?: string, userId?: string, persona?: string){
     const evalPrompt = this.createInterviewPrompt(qnas, 'postEval.txt')
     
     // Fix: Use the postEval.txt prompt directly instead of blank.txt
@@ -247,6 +265,28 @@ export class LangchainService implements OnModuleInit {
     if (!Array.isArray(parsed)) {
       console.warn('PostEval result is not an array, converting to array');
       parsed = [parsed];
+    }
+    
+    // Store AI evaluation in database if sessionId is provided
+    if (sessionId) {
+      try {
+        await this.db.saveAiEvaluation(
+          sessionId,
+          'post_interview_eval',
+          { qnas: qnas.map(q => ({ question: q.qcontent, answer: q.acontent })) },
+          result,
+          { totalQuestions: qnas.length, persona: persona }, // input metadata
+          parsed, // processed scores
+          'AI Post-Interview Evaluation', // feedback summary
+          userId // user ID if available
+        );
+        console.log(`Post-interview AI evaluation saved successfully for session: ${sessionId}`);
+      } catch (error) {
+        console.error('Failed to save post-interview AI evaluation:', error);
+        // Don't throw error - continue with the response
+      }
+    } else {
+      console.log('No sessionId provided, skipping database storage for post-interview evaluation');
     }
     
     return parsed;

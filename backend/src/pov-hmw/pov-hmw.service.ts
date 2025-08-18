@@ -154,14 +154,20 @@ export class PovHmwService {
   async getAiEvaluations(sessionId: string): Promise<{
     povEvaluations: any[];
     hmwEvaluations: any[];
+    preInterviewEvaluations: any[];
+    postInterviewEvaluations: any[];
   } | null> {
     try {
       const povEvaluations = await this.db.getAiEvaluations(sessionId, 'pov_feedback');
       const hmwEvaluations = await this.db.getAiEvaluations(sessionId, 'hmw_feedback');
+      const preInterviewEvaluations = await this.db.getAiEvaluations(sessionId, 'pre_question_eval');
+      const postInterviewEvaluations = await this.db.getAiEvaluations(sessionId, 'post_interview_eval');
       
       return {
         povEvaluations,
-        hmwEvaluations
+        hmwEvaluations,
+        preInterviewEvaluations,
+        postInterviewEvaluations
       };
     } catch (error) {
       this.logger.error('getAiEvaluations error', error);

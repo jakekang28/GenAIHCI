@@ -36,8 +36,8 @@ export class LlmController {
     return {result : evaluation}
   }
   @Post('eval-interview')
-  async postEvalInterview(@Query() query : {tag: PersonaDto['persona']}, @Body() body : {qnas : Qna[]}){
-    const evaluation =  await this.lc.postEval(body.qnas)
+  async postEvalInterview(@Query() query : {tag: PersonaDto['persona']}, @Body() body : {qnas : Qna[], sessionId?: string, userId?: string}){
+    const evaluation =  await this.lc.postEval(body.qnas, body.sessionId, body.userId, query.tag)
     return {result : evaluation}
   }
   @Post('eval-POV-dynamic')
