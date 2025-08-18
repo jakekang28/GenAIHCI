@@ -335,11 +335,11 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-6">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-4">
-            🗳️ Vote for the Top 3 HMW Questions
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">
+            Vote for the Top 3 HMW Questions
           </h1>
           <p className="text-gray-600">
-            Choose the 3 most promising HMW questions that open up the best solution opportunities
+            Select the questions that will lead to the most innovative solutions
           </p>
         </div>
 

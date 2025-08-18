@@ -62,15 +62,7 @@ const PostInterviewEvaluation = ({
           )}
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mt-8">
-            <h3 className="text-xl font-bold text-blue-800 mb-3">Overall Feedback</h3>
-            <p className="text-blue-700 break-words overflow-hidden">
-              Great work on your interview session! You successfully completed the structured interview process 
-              with a clear main question and three relevant follow-ups. Your questioning approach showed good 
-              progression from broad to specific, and you maintained focus on the user's experience. For future 
-              interviews, continue to focus on emotional responses and the 'why' behind user behaviors.
-            </p>
-          </div>
+
 
           <div className="flex justify-center mt-8">
             <button 
