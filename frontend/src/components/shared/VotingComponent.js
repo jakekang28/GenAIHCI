@@ -472,15 +472,15 @@ const VotingComponent = ({
 
   const getContentText = (x) => {
     if (!x) return '';
-    const contrib = x.contribution || x; // result 객체 또는 contribution 그대로
+    const contrib = x.contribution || x; 
     const c = contrib?.content;
     if (typeof c === 'string') return c;
     return c?.question || c?.statement || '';
   };
 
-  // --- POV (단일 선택) 화면: 기존 느낌 유지 + Continue 버튼 추가 ---
+
   if (!isMulti) {
-    const winnerRes = (results || [])[0] || null; // 서버에서 이미 득표수 desc로 정렬됨
+    const winnerRes = (results || [])[0] || null; 
     const winnerText = getContentText(winnerRes);
 
     return (
@@ -553,12 +553,12 @@ const VotingComponent = ({
           ))}
         </div>
 
-        {/* ✅ POV에서도 Continue 버튼 노출 */}
+
         <div style={{ marginTop: 20 }}>
           <button
             onClick={() => {
               if (!onVotingComplete) return;
-              // 부모에 단일 우승자 전달 (부모는 여기서 다음 단계로 이동)
+        
               onVotingComplete(winnerRes, results || []);
             }}
             style={{
@@ -573,7 +573,6 @@ const VotingComponent = ({
     );
   }
 
-  // --- HMW (다중 선택) 화면: 상위 maxSelections 모두 우승자로 표기 + 👑 하이라이트 ---
   const total = (results || []).length;
   const topCount = Math.min((maxSelections || 3), total);
   const winners = (results || []).slice(0, topCount);
@@ -584,7 +583,6 @@ const VotingComponent = ({
         🎉 Voting Complete!
       </h3>
 
-      {/* Top K 우승자 카드 */}
       <div
         style={{
           background: '#f0fdf4',
@@ -619,7 +617,7 @@ const VotingComponent = ({
         ))}
       </div>
 
-      {/* 전체 결과: 상위 topCount 모두 👑 + 하이라이트 */}
+  
       <div>
         <h4 style={{ marginBottom: 12 }}>Final Results:</h4>
         {(results || []).map((r, index) => {
@@ -674,7 +672,6 @@ const VotingComponent = ({
         })}
       </div>
 
-      {/* ✅ HMW에도 Continue 버튼 노출 (상위 maxSelections 전달) */}
       <div style={{ marginTop: 20 }}>
         <button
           onClick={() => {

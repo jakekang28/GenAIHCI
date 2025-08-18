@@ -74,24 +74,30 @@ const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue })
     socket.emit('room:contribution:submit', contribution);
     setHasSubmitted(true);
   };
-
+  const extractQuestionText = (winnerLike) => {
+    if (!winnerLike) return '';
+    const node = winnerLike.contribution || winnerLike; 
+    const content = node?.content;
+    if (typeof content === 'string') return content;
+    if (content?.question) return content.question;
+    if (typeof node === 'string') return node;
+    return '';
+  };
   const handleVotingComplete = (winner, results) => {
     console.log('Voting complete:', winner);
     console.log('Voting results:', results);
     
     // Extract the question content from the winner
-    let questionContent;
-    if (winner.content && winner.content.question) {
-      questionContent = winner.content.question;
-    } else if (typeof winner.content === 'string') {
-      questionContent = winner.content;
-    } else if (winner.content) {
-      questionContent = winner.content;
-    } else {
-      console.error('Could not extract question content from winner:', winner);
+    let questionContent = extractQuestionText(winner);
+    if (!questionContent && Array.isArray(results) && results.length) {
+      questionContent = extractQuestionText(results[0]);
+    }
+
+    if (!questionContent) {
+      console.error('Could not extract question content from winner/results:', { winner, results });
       return;
     }
-    
+
     console.log('Extracted question content:', questionContent);
     onContinue(questionContent);
   };
