@@ -11,7 +11,7 @@ const PeerTranscriptEvaluation = ({
   onBack, 
   onContinue 
 }) => {
-  const { sessionId } = useSession();
+  const { sessionId, members } = useSession();
   const { guest, ensureGuest } = useLocalGuest();
   
   // Fallback: try to reload guest data from storage if missing
@@ -56,7 +56,7 @@ const PeerTranscriptEvaluation = ({
   const [allTranscripts, setAllTranscripts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
+  const [completionStatus, setCompletionStatus] = useState(null);
 
   useEffect(() => {
     const fetchTranscripts = async () => {
@@ -73,15 +73,52 @@ const PeerTranscriptEvaluation = ({
         return;
       }
 
+      console.log('🔍 [PeerTranscriptEvaluation] Fetching transcripts for session:', sessionId);
+      console.log('🔍 [PeerTranscriptEvaluation] Current guest:', guest.guestUserId, guest.guestName);
+      console.log('🔍 [PeerTranscriptEvaluation] Session members:', members);
+
       try {
+        // Convert members to the format expected by the API
+        const participants = members.map(member => ({
+          userId: member.userId,
+          userName: member.userName
+        }));
         
+        console.log('🔍 [PeerTranscriptEvaluation] Checking completion status with participants:', participants);
+        console.log('🔍 [PeerTranscriptEvaluation] Total members from session:', members.length);
         
-        const response = await apiService.getSessionTranscripts(sessionId);
-        setAllTranscripts(response.transcripts || []);
+        // First check if all interviews are complete using participants
+        const completionResponse = await apiService.checkInterviewCompletionStatusWithParticipants(sessionId, participants);
+        console.log('🔍 [PeerTranscriptEvaluation] Completion status received:', completionResponse);
+        setCompletionStatus(completionResponse);
+        
+        // Only fetch transcripts if all interviews are complete
+        if (completionResponse.allCompleted) {
+          console.log('🔍 [PeerTranscriptEvaluation] All interviews complete, fetching transcripts...');
+          const response = await apiService.getSessionTranscripts(sessionId);
+          console.log('🔍 [PeerTranscriptEvaluation] Transcripts fetched:', response.transcripts?.length || 0);
+          setAllTranscripts(response.transcripts || []);
+        } else {
+          console.log('🔍 [PeerTranscriptEvaluation] Not all interviews complete yet');
+          setAllTranscripts([]);
+        }
       } catch (err) {
-        console.warn('Failed to fetch database transcripts:', err.message);
-        // Continue anyway - we'll show the current user's transcript
-        setAllTranscripts([]);
+        console.warn('Failed to fetch data with participants:', err.message);
+        // Fallback to the old method
+        try {
+          const completionResponse = await apiService.checkInterviewCompletionStatus(sessionId);
+          setCompletionStatus(completionResponse);
+          
+          if (completionResponse.allCompleted) {
+            const response = await apiService.getSessionTranscripts(sessionId);
+            setAllTranscripts(response.transcripts || []);
+          } else {
+            setAllTranscripts([]);
+          }
+        } catch (fallbackErr) {
+          console.warn('Fallback completion status check also failed:', fallbackErr.message);
+          setAllTranscripts([]);
+        }
       }
       
       setLoading(false);
@@ -90,8 +127,37 @@ const PeerTranscriptEvaluation = ({
     // Add a small delay to ensure any pending saves have completed
     const timer = setTimeout(fetchTranscripts, 1000);
     return () => clearTimeout(timer);
-  }, [sessionId, guest]); // Add guest as dependency
+  }, [sessionId, guest, members]); // Add members as dependency
 
+  // Set up periodic refresh when waiting for completion
+  useEffect(() => {
+    if (!completionStatus || completionStatus.allCompleted) {
+      return; // No need to refresh if all interviews are complete
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        // Convert members to the format expected by the API
+        const participants = members.map(member => ({
+          userId: member.userId,
+          userName: member.userName
+        }));
+        
+        const completionResponse = await apiService.checkInterviewCompletionStatusWithParticipants(sessionId, participants);
+        setCompletionStatus(completionResponse);
+        
+        // If all interviews are now complete, fetch transcripts
+        if (completionResponse.allCompleted) {
+          const response = await apiService.getSessionTranscripts(sessionId);
+          setAllTranscripts(response.transcripts || []);
+        }
+      } catch (err) {
+        console.warn('Failed to refresh completion status:', err.message);
+      }
+    }, 2000); // Check every 3 seconds for faster updates
+
+    return () => clearInterval(interval);
+  }, [sessionId, completionStatus, members]);
 
 
   const toggleDropdown = (transcriptId, questionType) => {
@@ -143,27 +209,32 @@ const PeerTranscriptEvaluation = ({
   const getProcessedTranscripts = () => {
     const transcripts = [];
     
-
+    console.log('🔍 [PeerTranscriptEvaluation] Raw transcripts from API:', allTranscripts);
+    console.log('🔍 [PeerTranscriptEvaluation] Current guest user ID:', guest?.guestUserId);
     
     // Add all database transcripts (from other users or previous sessions)
     if (allTranscripts && allTranscripts.length > 0) {
       // Count unique users for testing info
       const uniqueUserIds = new Set(allTranscripts.map(t => t.user_id));
+      console.log('🔍 [PeerTranscriptEvaluation] Unique user IDs found:', Array.from(uniqueUserIds));
       
-      // Deduplicate based on content similarity (in case of user ID issues)
+      // Deduplicate based on user ID instead of content similarity
       const uniqueTranscripts = [];
-      const seenContent = new Set();
+      const seenUserIds = new Set();
       
       for (const transcript of allTranscripts) {
-        // Create a content hash based on the first few messages
-        const firstMessages = transcript.messages?.slice(0, 3).map(m => m.text).join('|') || '';
-        const contentHash = firstMessages.slice(0, 100); // First 100 chars as simple hash
+        console.log('🔍 [PeerTranscriptEvaluation] Processing transcript for user:', transcript.user_name, 'ID:', transcript.user_id);
         
-        if (!seenContent.has(contentHash)) {
-          seenContent.add(contentHash);
+        if (!seenUserIds.has(transcript.user_id)) {
+          seenUserIds.add(transcript.user_id);
           uniqueTranscripts.push(transcript);
+          console.log('🔍 [PeerTranscriptEvaluation] Added transcript for:', transcript.user_name);
+        } else {
+          console.log('🔍 [PeerTranscriptEvaluation] Skipped duplicate user transcript for:', transcript.user_name);
         }
       }
+      
+      console.log('🔍 [PeerTranscriptEvaluation] After deduplication:', uniqueTranscripts.length, 'transcripts');
       
       const dbTranscripts = uniqueTranscripts.map((transcript, index) => {
         const processed = processTranscriptData(transcript);
@@ -174,6 +245,8 @@ const PeerTranscriptEvaluation = ({
         const displayName = isCurrentUser 
           ? `You (${transcript.user_name})` 
           : `${transcript.user_name} (${shortUserId})`;
+        
+        console.log('🔍 [PeerTranscriptEvaluation] Final transcript:', displayName, 'isCurrentUser:', isCurrentUser);
         
         return {
           ...processed,
@@ -188,7 +261,7 @@ const PeerTranscriptEvaluation = ({
       transcripts.push(...dbTranscripts);
     }
     
-
+    console.log('🔍 [PeerTranscriptEvaluation] Final processed transcripts:', transcripts.length);
     
     // If no transcripts at all, show a sample structure
     if (transcripts.length === 0) {
@@ -220,6 +293,54 @@ const PeerTranscriptEvaluation = ({
               <Clock className="mx-auto h-12 w-12 mb-4 text-purple-500 animate-spin" />
               <h2 className="text-xl font-semibold text-gray-800 mb-2">Loading Interview Transcripts...</h2>
               <p className="text-gray-600">Preparing transcript view...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show waiting state if not all interviews are complete
+  if (completionStatus && !completionStatus.allCompleted) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 p-6 flex items-center justify-center">
+        <div className="max-w-4xl mx-auto w-full">
+          <div className="bg-white rounded-2xl shadow-xl p-8">
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Clock className="w-8 h-8 text-yellow-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Waiting for Group Members</h2>
+              <p className="text-gray-600 mb-6">
+                Not all group members have completed their interviews yet. 
+                You'll be able to review and compare transcripts once everyone is finished.
+              </p>
+              
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                <div className="flex items-center justify-center space-x-4 text-sm text-yellow-800">
+                  <span>Progress: {completionStatus.completedInterviews} of {completionStatus.totalParticipants} interviews completed</span>
+                  <div className="flex space-x-2">
+                    {Array.from({ length: completionStatus.totalParticipants }, (_, i) => (
+                      <div 
+                        key={i}
+                        className={`w-3 h-3 rounded-full ${
+                          i < completionStatus.completedInterviews 
+                            ? 'bg-green-500' 
+                            : 'bg-yellow-300'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
+              <button 
+                onClick={() => window.location.reload()}
+                className="bg-yellow-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-yellow-700 transition-colors flex items-center mx-auto"
+              >
+                <Clock className="w-4 h-4 mr-2" />
+                Check Again
+              </button>
             </div>
           </div>
         </div>

@@ -81,4 +81,47 @@ export class DbController {
       throw new HttpException(e.message ?? 'Failed to fetch transcripts', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
+
+  @Post('interview-complete')
+  async markInterviewComplete(@Body() body: {
+    sessionId: string;
+    userId: string;
+  }) {
+    try {
+      const { sessionId, userId } = body;
+      
+      if (!sessionId || !userId) {
+        throw new HttpException('sessionId and userId are required', HttpStatus.BAD_REQUEST);
+      }
+
+      await this.db.markInterviewComplete(sessionId, userId);
+      return { success: true, message: 'Interview marked as complete' };
+    } catch (e) {
+      throw new HttpException(e.message ?? 'Failed to mark interview complete', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Get('interview-completion-status/:sessionId')
+  async getInterviewCompletionStatus(@Param('sessionId') sessionId: string) {
+    try {
+      const status = await this.db.getInterviewCompletionStatus(sessionId);
+      return { sessionId, ...status };
+    } catch (e) {
+      throw new HttpException(e.message ?? 'Failed to fetch interview completion status', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Post('interview-completion-status/:sessionId')
+  async getInterviewCompletionStatusWithParticipants(
+    @Param('sessionId') sessionId: string,
+    @Body() body: { participants: Array<{userId: string, userName: string}> }
+  ) {
+    try {
+      const { participants } = body;
+      const status = await this.db.getInterviewCompletionStatus(sessionId, participants);
+      return { sessionId, ...status };
+    } catch (e) {
+      throw new HttpException(e.message ?? 'Failed to fetch interview completion status', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
 }

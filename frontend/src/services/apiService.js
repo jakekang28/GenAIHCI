@@ -1,5 +1,7 @@
 //API SERVICE for handling HTTP requests to backend API
-const API_BASE_URL = 'http://localhost:3000';
+import config from '../config/config.js';
+
+const API_BASE_URL = config.BACKEND_URL;
 
 class ApiService {
   //POINT OF VIEW (POV) EVALUATION ENDPOINTS
@@ -358,6 +360,53 @@ class ApiService {
     });
     if (!response.ok) {
       throw new Error('Failed to fetch session transcripts');
+    }
+    const data = await response.json();
+    return data;
+  }
+
+  async markInterviewComplete(sessionId, userId) {
+    const response = await fetch(`${API_BASE_URL}/db/interview-complete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sessionId,
+        userId
+      }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to mark interview complete');
+    }
+    const data = await response.json();
+    return data;
+  }
+
+  async checkInterviewCompletionStatus(sessionId) {
+    const response = await fetch(`${API_BASE_URL}/db/interview-completion-status/${sessionId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) {
+      throw new Error('Failed to check interview completion status');
+    }
+    const data = await response.json();
+    return data;
+  }
+
+  async checkInterviewCompletionStatusWithParticipants(sessionId, participants) {
+    const response = await fetch(`${API_BASE_URL}/db/interview-completion-status/${sessionId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ participants }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to check interview completion status with participants');
     }
     const data = await response.json();
     return data;

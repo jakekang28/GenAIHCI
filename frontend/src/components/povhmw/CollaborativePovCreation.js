@@ -266,7 +266,7 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
                 <textarea
                   value={myPovStatement}
                   onChange={(e) => setMyPovStatement(e.target.value)}
-                  placeholder="We believe that [user/customer] needs [need] because [insight]..."
+                  placeholder="[USER] needs to [USER'S NEED] because/but/surprisingly [INSIGHT]"
                   className="w-full h-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
                   disabled={hasSubmitted}
                 />
@@ -275,7 +275,6 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                 <h4 className="font-medium text-amber-800 mb-2">💡 POV Statement Tips:</h4>
                 <ul className="text-sm text-amber-700 space-y-1">
-                  <li>• Start with "We believe that..."</li>
                   <li>• Include user, need, and insight</li>
                   <li>• Be specific and actionable</li>
                   <li>• Focus on human-centered needs</li>

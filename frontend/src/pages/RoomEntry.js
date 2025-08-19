@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiService from '../services/apiService';
 import { Users, Plus, LogIn, User, Hash } from 'lucide-react';
+import config from '../config/config.js';
 
-const API_BASE = 'http://localhost:3000';
+const API_BASE = config.BACKEND_URL;
 
 export default function RoomEntry() {
   const navigate = useNavigate();
@@ -127,6 +128,11 @@ export default function RoomEntry() {
       }
 
       console.log('Successfully joined room:', roomData.code);
+      
+      // Store room code for display (same as when creating a room)
+      localStorage.setItem('roomCode', roomData.code);
+      console.log('Stored room code in localStorage:', roomData.code);
+      
       goToRoom(roomData.id);
     } catch (e) {
       setError(e.message || 'Error.');

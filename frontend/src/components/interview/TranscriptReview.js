@@ -1,5 +1,7 @@
-import React from 'react';
-import { ArrowLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, ChevronRight, Clock, Users } from 'lucide-react';
+import { useSession } from '../../providers/SessionProvider';
+import { apiService } from '../../services/apiService';
 
 const TranscriptReview = ({ 
   chatMessages, 
@@ -8,6 +10,54 @@ const TranscriptReview = ({
   onBack, 
   onContinue 
 }) => {
+  const { sessionId, members } = useSession();
+  const [completionStatus, setCompletionStatus] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const checkCompletionStatus = async () => {
+      if (!sessionId) return;
+      
+      try {
+        setLoading(true);
+        
+        // Convert members to the format expected by the API
+        const participants = members.map(member => ({
+          userId: member.userId,
+          userName: member.userName
+        }));
+        
+        console.log('🔍 [TranscriptReview] Checking completion status with participants:', participants);
+        console.log('🔍 [TranscriptReview] Total members from session:', members.length);
+        
+        // Use the new method that includes participants
+        const status = await apiService.checkInterviewCompletionStatusWithParticipants(sessionId, participants);
+        console.log('🔍 [TranscriptReview] Completion status received:', status);
+        setCompletionStatus(status);
+      } catch (error) {
+        console.warn('Failed to check completion status:', error);
+        // Fallback to the old method if the new one fails
+        try {
+          const status = await apiService.checkInterviewCompletionStatus(sessionId);
+          console.log('🔍 [TranscriptReview] Fallback completion status:', status);
+          setCompletionStatus(status);
+        } catch (fallbackError) {
+          console.warn('Fallback completion status check also failed:', fallbackError);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkCompletionStatus();
+
+    // Set up periodic refresh when waiting for completion
+    if (sessionId) {
+      const interval = setInterval(checkCompletionStatus, 2000); // Check every 3 seconds for faster updates
+      return () => clearInterval(interval);
+    }
+  }, [sessionId, members]);
+
   const getMessageType = (message, index) => {
     if (message.text === selectedGroupQuestion) return 'main-question';
     if (message.sender === 'user' && message.text !== selectedGroupQuestion) return 'follow-up';
@@ -23,6 +73,39 @@ const TranscriptReview = ({
       <div className="max-w-4xl mx-auto w-full">
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-6">Interview Transcript</h1>
+
+          {/* Group Progress Indicator */}
+          {completionStatus && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center space-x-3 mb-3">
+                <Users className="w-5 h-5 text-blue-600" />
+                <h3 className="text-lg font-semibold text-blue-800">Group Progress</h3>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-blue-700">
+                  {completionStatus.completedInterviews} of {completionStatus.totalParticipants} interviews completed
+                </span>
+                <div className="flex space-x-2">
+                  {Array.from({ length: completionStatus.totalParticipants }, (_, i) => (
+                    <div 
+                      key={i}
+                      className={`w-3 h-3 rounded-full ${
+                        i < completionStatus.completedInterviews 
+                          ? 'bg-green-500' 
+                          : 'bg-blue-300'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+              {!completionStatus.allCompleted && (
+                <div className="mt-3 flex items-center text-blue-600 text-sm">
+                  <Clock className="w-4 h-4 mr-2" />
+                  Waiting for group members to complete their interviews
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="space-y-4 mb-8">
             {chatMessages.map((message, index) => {
@@ -84,10 +167,24 @@ const TranscriptReview = ({
           <div className="flex justify-center">
             <button 
               onClick={onContinue}
-              className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center"
+              disabled={completionStatus && !completionStatus.allCompleted}
+              className={`px-8 py-3 rounded-lg font-semibold transition-colors flex items-center ${
+                completionStatus && !completionStatus.allCompleted
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
             >
-              Continue to Peer Evaluation
-              <ChevronRight className="w-5 h-5 ml-2" />
+              {completionStatus && !completionStatus.allCompleted ? (
+                <>
+                  <Clock className="w-5 h-5 mr-2" />
+                  Waiting for Group Members
+                </>
+              ) : (
+                <>
+                  Continue to Peer Evaluation
+                  <ChevronRight className="w-5 h-5 ml-2" />
+                </>
+              )}
             </button>
           </div>
         </div>

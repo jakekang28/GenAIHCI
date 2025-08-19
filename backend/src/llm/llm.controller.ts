@@ -26,8 +26,8 @@ export class LlmController {
     return { result: response };
   }
   @Post('interview')
-  async interview(@Query() query : {tag : PersonaDto['persona']}, @Body() body : {isInit : boolean, question : string}){
-    const session = await this.lc.interview(body.isInit, body.question, query.tag)
+  async interview(@Query() query : {tag : PersonaDto['persona']}, @Body() body : {isInit : boolean, question : string, userId?: string}){
+    const session = await this.lc.interview(body.isInit, body.question, query.tag, body.userId)
     return {transcript : session}
   }
   @Post('preeval-interview')
@@ -62,5 +62,30 @@ export class LlmController {
     
     const response = await this.lc.runDynamicPrompt('hmw.txt', dynamicData);
     return { result: response };
+  }
+
+  @Get('agent-status')
+  async getAgentStatus() {
+    const status = this.lc.getAgentStatus();
+    return { agents: status };
+  }
+
+  @Get('user-memory/:userId')
+  async getUserMemory(@Query('userId') userId: string) {
+    const memory = this.lc.getUserMemory(userId);
+    return { memory };
+  }
+
+  @Get('check-persona-context/:userId')
+  async checkPersonaContext(@Query('userId') userId: string) {
+    const hasContext = this.lc.hasPersonaContext(userId);
+    return { userId, hasPersonaContext: hasContext };
+  }
+
+  @Get('test-conversation-history/:userId')
+  async testConversationHistory(@Query('userId') userId: string) {
+    // This will test the conversation history extraction
+    const history = await this.lc.testGetConversationHistory(userId);
+    return { userId, conversationHistory: history };
   }
 }

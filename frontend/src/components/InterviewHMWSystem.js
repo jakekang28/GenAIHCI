@@ -397,7 +397,44 @@ const InterviewHMWSystem = () => {
           selectedGroupQuestion={selectedGroupQuestion}
           selectedScenario={selectedScenario}
           onBack={() => navigateToStep('interview-session')}
-          onContinue={() => navigateToStep('peer-transcript-evaluation')}
+          onContinue={async () => {
+            // Check if all interviews are complete before allowing navigation
+            if (sessionId) {
+              try {
+                // Convert members to the format expected by the API
+                const participants = members.map(member => ({
+                  userId: member.userId,
+                  userName: member.userName
+                }));
+                
+                const completionStatus = await apiService.checkInterviewCompletionStatusWithParticipants(sessionId, participants);
+                if (completionStatus.allCompleted) {
+                  navigateToStep('peer-transcript-evaluation');
+                } else {
+                  // Show alert that we need to wait
+                  alert(`Please wait for all group members to complete their interviews. Currently ${completionStatus.completedInterviews} of ${completionStatus.totalParticipants} are done.`);
+                }
+              } catch (error) {
+                console.warn('Failed to check completion status:', error);
+                // Fallback to the old method
+                try {
+                  const completionStatus = await apiService.checkInterviewCompletionStatus(sessionId);
+                  if (completionStatus.allCompleted) {
+                    navigateToStep('peer-transcript-evaluation');
+                  } else {
+                    alert(`Please wait for all group members to complete their interviews. Currently ${completionStatus.completedInterviews} of ${completionStatus.totalParticipants} are done.`);
+                  }
+                } catch (fallbackError) {
+                  console.warn('Fallback completion status check also failed:', fallbackError);
+                  // Allow navigation anyway if check fails
+                  navigateToStep('peer-transcript-evaluation');
+                }
+              }
+            } else {
+              // No session ID, allow navigation
+              navigateToStep('peer-transcript-evaluation');
+            }
+          }}
         />
       ),
       'peer-transcript-evaluation': () => (

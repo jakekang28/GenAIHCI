@@ -149,6 +149,13 @@ const InterviewSession = ({
       
       // Save transcript to database before continuing
       if (sessionId && finalGuest && finalGuest.guestUserId && chatMessages.length > 0) {
+        console.log('🔍 [InterviewSession] Saving transcript with:', {
+          sessionId,
+          userId: finalGuest.guestUserId,
+          userName: finalGuest.guestName,
+          messageCount: chatMessages.length
+        });
+        
         await apiService.saveTranscript(
           sessionId,
           finalGuest.guestUserId,
@@ -156,8 +163,25 @@ const InterviewSession = ({
           chatMessages,
           selectedScenario
         );
+        
+        // Mark this user as having completed their interview
+        if (sessionId && finalGuest.guestUserId) {
+          try {
+            console.log('🔍 [InterviewSession] Marking interview complete for user:', finalGuest.guestUserId);
+            await apiService.markInterviewComplete(sessionId, finalGuest.guestUserId);
+            console.log('🔍 [InterviewSession] Successfully marked interview complete');
+          } catch (error) {
+            console.warn('Failed to mark interview complete:', error);
+            // Continue anyway - don't block the flow
+          }
+        }
       } else {
-        console.warn('Cannot save transcript, missing data');
+        console.warn('Cannot save transcript, missing data:', {
+          hasSessionId: !!sessionId,
+          hasGuest: !!finalGuest,
+          hasGuestUserId: !!(finalGuest?.guestUserId),
+          hasChatMessages: chatMessages.length > 0
+        });
       }
     } catch (error) {
       console.error('❌ [InterviewSession] Failed to save transcript:', error);

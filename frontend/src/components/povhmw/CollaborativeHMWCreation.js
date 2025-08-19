@@ -12,42 +12,81 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
   //Util Functions
   const toArray = (x) => (Array.isArray(x) ? x : x ? [x] : []);
   const normHmw = (c) => {
+    console.log('🔍 [CollaborativeHMWCreation] normHmw called with:', c);
     const content = typeof c?.content === 'string' ? { question: c.content } : (c?.content ?? {});
-    return {
+    const normalized = {
     ...c,
     content,
     userId: c?.userId ?? c?.content?.userId,
     socketId: c?.socketId ?? c?.content?.socketId,
     authorId: c?.authorId ?? c?.content?.authorId,
-    }
+    };
+    console.log('🔍 [CollaborativeHMWCreation] normHmw result:', normalized);
+    return normalized;
   }
   const hmwKey = (x) => {
     const a = x.userId || x.authorId || x.socketId || 'u';
     const id = x.id;
-    if (id) return id;
+    if (id) {
+      console.log('🔍 [CollaborativeHMWCreation] hmwKey using id:', id);
+      return id;
+    }
     const ord = x.content?.order;
-    if (ord != null) return `${a}::ord:${ord}`;
+    if (ord != null) {
+      const key = `${a}::ord:${ord}`;
+      console.log('🔍 [CollaborativeHMWCreation] hmwKey using order:', key);
+      return key;
+    }
     const q = (x.content?.question || '').trim().toLowerCase();
-    return `${a}::q:${q}`;
+    const key = `${a}::q:${q}`;
+    console.log('🔍 [CollaborativeHMWCreation] hmwKey using question:', key);
+    return key;
   }
   const upsertHmwByStableId = (prev, incomingRaw) => {
+    console.log('🔍 [CollaborativeHMWCreation] upsertHmwByStableId called with:', {
+      prevCount: prev.length,
+      incomingCount: incomingRaw.length,
+      prev: prev,
+      incoming: incomingRaw
+    });
+    
     const prevN = prev.map(normHmw);
     const incN  = incomingRaw.map(normHmw);
     const map = new Map(prevN.map((p) => [hmwKey(p), p]));
+    
+    console.log('🔍 [CollaborativeHMWCreation] Normalized data:', {
+      prevNormalized: prevN,
+      incomingNormalized: incN
+    });
+    
     for (const n of incN) {
       const k = hmwKey(n);
+      console.log('🔍 [CollaborativeHMWCreation] Processing incoming item:', {
+        item: n,
+        key: k,
+        existing: map.get(k)
+      });
       map.set(k, { ...(map.get(k) ?? {}), ...n });
     }
-    return Array.from(map.values());
+    
+    const result = Array.from(map.values());
+    console.log('🔍 [CollaborativeHMWCreation] upsertHmwByStableId result:', {
+      resultCount: result.length,
+      result: result
+    });
+    
+    return result;
   }
   useEffect(() => {
     if (!socket) return;
 
     // Listen for contributions from other members
     const handleContributions = (data) => {
+      console.log('🔍 [CollaborativeHMWCreation] handleContributions received:', data);
       if (data?.type !== 'hmw_question') return;
       const incoming = Array.isArray(data?.contributions) ? data.contributions : toArray(data)
       if (!incoming.length) return;
+      console.log('🔍 [CollaborativeHMWCreation] Processing incoming contributions:', incoming);
       setContributions((prev) => upsertHmwByStableId(prev, incoming));
     };
 
@@ -57,14 +96,18 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
       }
     };
      const handleContributionAck = (ack) => {
+      console.log('🔍 [CollaborativeHMWCreation] handleContributionAck received:', ack);
       if (!ack?.ok || !ack?.contribution) return;
+      console.log('🔍 [CollaborativeHMWCreation] Processing contribution ack:', ack.contribution);
       setContributions((prev) => upsertHmwByStableId(prev, [ack.contribution]));
     };
     const handleVotingStarted = (data) => {
+      console.log('🔍 [CollaborativeHMWCreation] handleVotingStarted received:', data);
       if (data?.type !== 'hmw_question') return;
       if (data?.roomId && data.roomId !== sessionId) return;
       setPhase('voting');
       if (data?.contributions) {
+        console.log('🔍 [CollaborativeHMWCreation] Setting contributions from voting started:', data.contributions);
         setContributions(upsertHmwByStableId([], data.contributions));
       }
     };
@@ -106,6 +149,9 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
       userName: myUserName,
       saveToDb: true,
     };
+    
+    console.log('🔍 [CollaborativeHMWCreation] Submitting HMW questions:', validQuestions);
+    
     // Submit each question as a separate contribution
     validQuestions.forEach((question, index) => {
       const order = index + 1;
@@ -127,8 +173,11 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
         }
       };
 
+      console.log('🔍 [CollaborativeHMWCreation] Emitting contribution:', contribution);
       socket.emit('room:contribution:submit', contribution);
-      setContributions((prev) => upsertHmwByStableId(prev, [contribution]));
+      
+      // Don't add to local state here - wait for server acknowledgment to avoid duplicates
+      // setContributions((prev) => upsertHmwByStableId(prev, [contribution]));
     });
 
     setHasSubmitted(true);
@@ -181,6 +230,8 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
   );
 
   const renderHmwList = () => {
+    console.log('🔍 [CollaborativeHMWCreation] renderHmwList - current contributions:', contributions);
+    
     if (contributions.length === 0) {
       return (
         <div className="text-center py-8 text-gray-500">
@@ -202,6 +253,8 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
       }
       groupedContributions[userId].questions.push(contribution);
     });
+
+    console.log('🔍 [CollaborativeHMWCreation] renderHmwList - grouped contributions:', groupedContributions);
 
     return (
       <div className="space-y-6">

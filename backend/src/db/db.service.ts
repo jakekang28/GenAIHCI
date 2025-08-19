@@ -473,16 +473,18 @@ export class DbService {
     messages: any[],
     scenarioData?: any
   ): Promise<InterviewTranscriptRow> {
+    this.logger.log(`Saving transcript for session: ${sessionId}, user: ${userName} (${userId}), messages: ${messages.length}`);
+    
     const { data, error } = await this.client
       .from('interview_transcripts')
-      .upsert({
+      .insert({
         session_id: sessionId,
         user_id: userId,
         user_name: userName,
         messages,
         scenario_data: scenarioData
       })
-      .select('*')
+      .select()
       .single();
     
     if (error) {
@@ -490,11 +492,14 @@ export class DbService {
       throw error;
     }
     
+    this.logger.log(`Successfully saved transcript with ID: ${data.id}`);
     return data as InterviewTranscriptRow;
   }
 
   /** Get transcripts for session */
   async getTranscripts(sessionId: string): Promise<InterviewTranscriptRow[]> {
+    this.logger.log(`Fetching transcripts for session: ${sessionId}`);
+    
     const { data, error } = await this.client
       .from('interview_transcripts')
       .select('*')
@@ -506,7 +511,111 @@ export class DbService {
       throw error;
     }
     
+    this.logger.log(`Found ${data?.length || 0} transcripts for session ${sessionId}`);
+    if (data && data.length > 0) {
+      data.forEach((transcript, index) => {
+        this.logger.log(`Transcript ${index + 1}: user_id=${transcript.user_id}, user_name=${transcript.user_name}, messages=${transcript.messages?.length || 0}`);
+      });
+    }
+    
     return (data || []) as InterviewTranscriptRow[];
+  }
+
+  /** Mark a user's interview as complete */
+  async markInterviewComplete(sessionId: string, userId: string): Promise<void> {
+    const { error } = await this.client
+      .from('session_state')
+      .upsert({
+        session_id: sessionId,
+        key: `interview_complete_${userId}`,
+        value: { completed: true, completedAt: new Date().toISOString() }
+      });
+    
+    if (error) {
+      this.logger.error('markInterviewComplete error', error);
+      throw error;
+    }
+  }
+
+  /** Check interview completion status for all users in a session */
+  async getInterviewCompletionStatus(sessionId: string, participants?: Array<{userId: string, userName: string}>): Promise<{
+    totalParticipants: number;
+    completedInterviews: number;
+    completionStatus: Record<string, boolean>;
+    allCompleted: boolean;
+  }> {
+    let totalParticipants = 0;
+    let participantUserIds: string[] = [];
+
+    if (participants && participants.length > 0) {
+      // Use provided participants (from WebSocket rooms)
+      totalParticipants = participants.length;
+      participantUserIds = participants.map(p => p.userId);
+      this.logger.log(`Using provided participants for session ${sessionId}: ${totalParticipants} participants`);
+      this.logger.log(`Participant IDs: ${participantUserIds.join(', ')}`);
+    } else {
+      // Fallback to database participants
+      this.logger.log(`No participants provided, falling back to database for session ${sessionId}`);
+      const { data: dbParticipants, error: participantsError } = await this.client
+        .from('session_participants')
+        .select('user_id')
+        .eq('session_id', sessionId)
+        .eq('is_active', true);
+      
+      if (participantsError) {
+        this.logger.error('getInterviewCompletionStatus participants error', participantsError);
+        throw participantsError;
+      }
+
+      totalParticipants = dbParticipants?.length || 0;
+      participantUserIds = dbParticipants?.map(p => p.user_id) || [];
+      this.logger.log(`Database participants for session ${sessionId}: ${totalParticipants} participants`);
+      this.logger.log(`Database participant IDs: ${participantUserIds.join(', ')}`);
+    }
+
+    if (totalParticipants === 0) {
+      this.logger.warn(`No participants found for session ${sessionId}`);
+      return {
+        totalParticipants: 0,
+        completedInterviews: 0,
+        completionStatus: {},
+        allCompleted: false
+      };
+    }
+
+    // Get completion status for each participant
+    const completionStatus: Record<string, boolean> = {};
+    let completedInterviews = 0;
+
+    for (const userId of participantUserIds) {
+      const { data: stateData, error: stateError } = await this.client
+        .from('session_state')
+        .select('value')
+        .eq('session_id', sessionId)
+        .eq('key', `interview_complete_${userId}`);
+      
+      if (stateError) {
+        this.logger.warn(`Error checking completion for user ${userId}:`, stateError);
+        completionStatus[userId] = false;
+      } else {
+        const isCompleted = stateData?.[0]?.value?.completed === true;
+        completionStatus[userId] = isCompleted;
+        if (isCompleted) {
+          completedInterviews++;
+        }
+        this.logger.log(`User ${userId} completion status: ${isCompleted}`);
+      }
+    }
+
+    const result = {
+      totalParticipants,
+      completedInterviews,
+      completionStatus,
+      allCompleted: completedInterviews === totalParticipants
+    };
+
+    this.logger.log(`Completion status for session ${sessionId}: ${completedInterviews}/${totalParticipants} completed, allCompleted: ${result.allCompleted}`);
+    return result;
   }
 
   // ============================================================================
