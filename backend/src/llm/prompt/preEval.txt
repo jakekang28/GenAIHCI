@@ -40,8 +40,6 @@ Do not rewrite or fix the question
 Output should ONLY be in the following JSON object format. Do not include any other text, explanations, or formatting outside the JSON.
 {"mistakes" : "Closed Questions", "response" : "Example Explanation"}.
 
-DO NOT ADD other explanations except the JSON format.
-
 ### Final Guidelines 
 Use natural and constructive language
 Treat each question individually

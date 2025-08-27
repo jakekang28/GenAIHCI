@@ -67,7 +67,8 @@ export class LangchainService implements OnModuleInit {
     this.sharedLlm = new ChatOpenAI({ 
       openAIApiKey: process.env.OPENAI_API_KEY, 
       modelName: 'gpt-4o', 
-      temperature: 0.3
+      temperature: 0.3,
+      maxTokens: 150 //limit response length
     });
     
     // Evaluator LLM for pre/post interview evaluations - temperature 0 for consistent scoring
