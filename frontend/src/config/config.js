@@ -3,13 +3,13 @@
 
 const config = {
   // Backend API configuration
-  BACKEND_URL: 'http://192.xxx.xxx.xxx:3000',
+  BACKEND_URL: process.env.REACT_APP_BACKEND_URL || 'http://localhost:3000',
   
   // Frontend URL (for CORS and redirects)
-  FRONTEND_URL: 'http://192.xxx.xxx.xxx:3001',
+  FRONTEND_URL: process.env.REACT_APP_FRONTEND_URL || 'http://localhost:3001',
   
   // WebSocket configuration
-  WEBSOCKET_URL: 'http://192.xxx.xxx.xxx:3000',
+  WEBSOCKET_URL: process.env.REACT_APP_BACKEND_URL || 'http://localhost:3000',
   
   // API endpoints (relative to BACKEND_URL)
   API_ENDPOINTS: {

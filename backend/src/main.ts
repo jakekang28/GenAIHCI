@@ -8,15 +8,18 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
   //Enable CORS for frontend integration
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+  const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+  
   app.enableCors({
-    origin: ['http://192.xxx.xxx.xxx:3001', 'http://192.xxx.xxx.xxx:3000'], //Allow both ports during development
-    //origin: ['http://localhost:3001', 'http://localhost:3000'], //Allow both ports during development
+    origin: [frontendUrl, backendUrl], // Allow both URLs from environment variables
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   });
 
-  await app.listen(process.env.PORT ?? 3000);
-  console.log('Backend server running on http://localhost:3000');
+  const port = process.env.PORT ?? 3000;
+  await app.listen(port);
+  console.log(`Backend server running on http://localhost:${port}`);
 }
 bootstrap();
