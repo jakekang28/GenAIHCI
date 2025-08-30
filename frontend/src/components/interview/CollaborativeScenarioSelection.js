@@ -3,7 +3,7 @@ import { ArrowLeft, ChevronRight, Users, CheckCircle, Clock } from 'lucide-react
 import { scenarioPersonaPairs } from '../shared/constants';
 import ScenarioVotingComponent from '../shared/ScenarioVotingComponent';
 import { useSession } from '../../providers/SessionProvider';
-
+import { useBackTrap } from '../../hooks/useBackTrap.ts';
 const CollaborativeScenarioSelection = ({ onBack, onContinue, onPersonaSelection }) => {
   const { sessionId, members, socket } = useSession();
   const [selectedScenario, setSelectedScenario] = useState(null);
@@ -12,6 +12,7 @@ const CollaborativeScenarioSelection = ({ onBack, onContinue, onPersonaSelection
   const [results, setResults] = useState([]);
   const [countdown, setCountdown] = useState(3);
   // Auto-start voting when component mounts
+  useBackTrap(true)
   useEffect(() => {
     if (socket && sessionId) {
       console.log('[CollaborativeScenarioSelection] Auto-starting scenario voting');

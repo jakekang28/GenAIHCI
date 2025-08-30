@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { scenarioPersonaPairs } from '../shared/constants';
-
+import { useBackTrap } from '../../hooks/useBackTrap.ts';
 const ScenarioSelection = ({ onBack, onContinue, onPersonaSelection }) => {
   const [selectedScenario, setSelectedScenario] = useState(null);
-
+  useBackTrap(true)
   const handleContinue = () => {
     if (selectedScenario) {
       onPersonaSelection(selectedScenario.tag);

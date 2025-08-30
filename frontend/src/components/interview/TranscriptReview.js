@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, ChevronRight, Clock, Users } from 'lucide-react';
 import { useSession } from '../../providers/SessionProvider';
 import { apiService } from '../../services/apiService';
-
+import { useBackTrap } from '../../hooks/useBackTrap.ts';
 const TranscriptReview = ({ 
   chatMessages, 
   selectedGroupQuestion, 
@@ -13,7 +13,7 @@ const TranscriptReview = ({
   const { sessionId, members } = useSession();
   const [completionStatus, setCompletionStatus] = useState(null);
   const [loading, setLoading] = useState(false);
-
+  useBackTrap(true)
   useEffect(() => {
     const checkCompletionStatus = async () => {
       if (!sessionId) return;

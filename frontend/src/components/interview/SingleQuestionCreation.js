@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
-
+import { useBackTrap } from '../../hooks/useBackTrap.ts';
 const SingleQuestionCreation = ({ selectedScenario, onBack, onContinue }) => {
   const [prePlannedQuestion, setPrePlannedQuestion] = useState('');
-
+  useBackTrap(true)
   const handleContinue = () => {
     if (prePlannedQuestion.trim()) {
       onContinue(prePlannedQuestion);

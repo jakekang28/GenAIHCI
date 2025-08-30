@@ -589,6 +589,59 @@ handleReadySync(
   });
 }
   /** Start voting session for contributions (long-term) */
+  @SubscribeMessage('room:reset_type')
+async handleRoomResetType(
+  @MessageBody() body: { roomId: string; type: 'interview_question' | 'pov_statement' | 'hmw_question' | 'scenario_selection' },
+  @ConnectedSocket() socket: Socket,
+) {
+  try {
+    const { roomId, type } = body || {};
+    if (!roomId || !type) {
+      socket.emit('room:error', { message: 'roomId and type are required' });
+      return;
+    }
+
+
+    // const member = this.rooms.get(roomId)?.get(socket.id);
+    // if (!member || !member.isHost) {
+    //   socket.emit('room:error', { message: 'Only the host can reset this type' });
+    //   return;
+    // }
+
+    const resetAt = new Date().toISOString();
+
+    // 1) 인메모리 contribution 중 해당 type만 제거
+    const roomMap = this.roomContributions.get(roomId);
+    if (roomMap) {
+      for (const [key, contrib] of roomMap.entries()) {
+        if (contrib?.type === type) {
+          roomMap.delete(key);
+        }
+      }
+    }
+
+    // 2) 투표 세션 상태 초기화 (DB의 session_state만 idle로 돌림; 실제 기여 DB는 보존)
+    await this.db.setSessionState(roomId, `voting_${type}`, {
+      status: 'idle',
+      sessionId: null,
+      votesByUser: {},
+      resetAt,
+    });
+
+    // 3) 클라이언트에 리셋 알림 + 해당 타입의 빈 목록 브로드캐스트
+    this.server.to(roomId).emit('room:type_reset', { roomId, type, resetAt });
+    this.server.to(roomId).emit('room:contributions', {
+      roomId,
+      type,
+      contributions: [],
+    });
+
+    this.logger.log(`[room:reset_type] Cleared in-memory ${type} for room ${roomId} at ${resetAt}`);
+  } catch (err) {
+    this.logger.error('Error in room:reset_type', err);
+    socket.emit('room:error', { message: 'Failed to reset type' });
+  }
+}
   @SubscribeMessage('room:start_voting')
   async handleStartVoting(
     @MessageBody() body: { 

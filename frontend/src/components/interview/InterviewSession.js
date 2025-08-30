@@ -3,7 +3,7 @@ import { ArrowLeft, ChevronRight, MessageCircle, Send } from 'lucide-react';
 import { useSession } from '../../providers/SessionProvider';
 import { useLocalGuest } from '../../hooks/useLocalGuest';
 import { apiService } from '../../services/apiService';
-
+import { useBackTrap } from '../../hooks/useBackTrap.ts';
 const InterviewSession = ({ 
   selectedScenario, 
   selectedGroupQuestion, 
@@ -12,6 +12,7 @@ const InterviewSession = ({
   generateAIResponse,
   onUpdateQaHistory 
 }) => {
+  useBackTrap(true)
   const { sessionId } = useSession();
   const { guest } = useLocalGuest();
   const [chatMessages, setChatMessages] = useState([]);

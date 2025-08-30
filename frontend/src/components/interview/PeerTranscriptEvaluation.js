@@ -3,7 +3,7 @@ import { ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Clock, AlertCircle } f
 import { useSession } from '../../providers/SessionProvider';
 import { useLocalGuest } from '../../hooks/useLocalGuest';
 import { apiService } from '../../services/apiService';
-
+import { useBackTrap } from '../../hooks/useBackTrap.ts';
 const PeerTranscriptEvaluation = ({ 
   chatMessages, 
   selectedGroupQuestion, 
@@ -13,7 +13,7 @@ const PeerTranscriptEvaluation = ({
 }) => {
   const { sessionId, members } = useSession();
   const { guest, ensureGuest } = useLocalGuest();
-  
+  useBackTrap(true)
   // Fallback: try to reload guest data from storage if missing
   useEffect(() => {
     if (!guest) {

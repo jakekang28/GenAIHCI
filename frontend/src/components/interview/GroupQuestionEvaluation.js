@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, ChevronRight, Users, CheckCircle } from 'lucide-react';
 import { generateGroupmateQuestions } from '../shared/utils';
-
+import { useBackTrap } from '../../hooks/useBackTrap.ts';
 const GroupQuestionEvaluation = ({ prePlannedQuestion, selectedScenario, onBack, onContinue }) => {
   const [selectedGroupQuestion, setSelectedGroupQuestion] = useState('');
   
@@ -12,7 +12,7 @@ const GroupQuestionEvaluation = ({ prePlannedQuestion, selectedScenario, onBack,
       onContinue(selectedGroupQuestion);
     }
   };
-
+  useBackTrap(true)
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-teal-100 p-6 flex items-center justify-center">
       <div className="max-w-5xl mx-auto w-full">

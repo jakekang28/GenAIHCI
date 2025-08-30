@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowLeft, ChevronRight, CheckCircle } from 'lucide-react';
 import LoadingPage from '../LoadingPage';
 import { mistakeTypes } from '../shared/constants';
-
+import { useBackTrap } from '../../hooks/useBackTrap.ts';
 const AIQuestionFeedback = ({ 
   selectedGroupQuestion, 
   selectedScenario, 
@@ -12,6 +12,7 @@ const AIQuestionFeedback = ({
   onBack, 
   onContinue 
 }) => {
+  useBackTrap(true)
   if (loading) {
     return (
       <LoadingPage

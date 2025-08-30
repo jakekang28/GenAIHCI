@@ -1,13 +1,14 @@
 import React from 'react';
 import { ArrowLeft, Star } from 'lucide-react';
 import LoadingPage from '../LoadingPage';
-
+import { useBackTrap } from '../../hooks/useBackTrap.ts';
 const PostInterviewEvaluation = ({ 
   aiScoreFeedback, 
   loading, 
   onBack, 
   onComplete 
 }) => {
+  useBackTrap(true)
   if (loading) {
     return (
       <LoadingPage

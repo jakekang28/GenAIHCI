@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, ChevronRight, Users, Clock, Lightbulb } from 'lucide-react';
 import VotingComponent from '../shared/VotingComponent';
 import { useSession } from '../../providers/SessionProvider';
-
+import { useBackTrap } from '../../hooks/useBackTrap.ts';
 const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue }) => {
   const { sessionId, members, socket } = useSession();
   const [myQuestion, setMyQuestion] = useState('');
@@ -10,18 +10,40 @@ const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue })
   const [contributions, setContributions] = useState([]);
   const [phase, setPhase] = useState('create'); // types: 'create', 'voting', 'results'
   const [votingStarted, setVotingStarted] = useState(false);
-
+  const [resetAt, setResetAt] = useState(0);
+  useBackTrap(true)
+  useEffect(() => {
+  if (!socket) return;
+  const onTypeReset = (d) => {
+    if (d?.type !== 'interview_question') return;
+    // 리셋 기준 시각 저장
+    setResetAt(Date.now());
+    // 로컬 상태 초기화
+    setContributions([]);
+    setHasSubmitted(false);
+    setMyQuestion('');
+    setPhase('create');
+    setVotingStarted(false);
+  };
+  socket.on('room:type_reset', onTypeReset);
+  return () => socket.off('room:type_reset', onTypeReset);
+}, [socket]);
   useEffect(() => {
     if (!socket) return;
 
     // Listen for contributions from other members
     const handleContributions = (data) => {
-      console.log('[CollaborativeQuestionCreation] room:contributions received:', data);
-      if (data.type === 'interview_question') {
-        console.log('[CollaborativeQuestionCreation] Setting contributions:', data.contributions);
-        setContributions(data.contributions || []);
-      }
-    };
+  if (data.type !== 'interview_question') return;
+  const list = Array.isArray(data.contributions) ? data.contributions : [];
+  const filtered = resetAt
+    ? list.filter((c) => {
+        const t = Date.parse(c?.timestamp || '') || 0;
+        return t >= resetAt;
+      })
+    : list;
+
+  setContributions(filtered);
+};
 
     const handlePhaseChange = (data) => {
       if (data.stage) {
