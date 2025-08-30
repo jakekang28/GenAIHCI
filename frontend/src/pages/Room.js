@@ -217,7 +217,7 @@ export default function Room() {
             <ConfirmButton
             roomId={sessionId}
             checkpointKey="room:start"
-            onHostContinue={() => navigate(`/app/${sessionId}`)}
+            onHostContinue={() => navigate(`/app/${sessionId}`, {replace : true, state : {from : 'room'}})}
             className="flex justify-center"
           />
           </div>

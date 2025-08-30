@@ -357,9 +357,9 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
 
               <button
                 onClick={submitHmwQuestions}
-                disabled={myHmwQuestions.every(q => !q.trim()) || hasSubmitted}
+                disabled={!myHmwQuestions.every(q => q.trim().length > 0) || hasSubmitted}
                 className="w-full bg-green-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-              >
+              > mn    
                 {hasSubmitted ? '✓ HMW Questions Submitted' : 'Submit HMW Questions'}
               </button>
             </div>
