@@ -1,31 +1,42 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
-export function useBackTrap(enable: boolean) {
+type Options =
+  | boolean
+  | {
+      hard?: boolean;
+    };
+export function useBackTrap(opts: Options = true) {
+  const hard = typeof opts === 'boolean' ? opts : !!opts.hard;
   const armedRef = useRef(false);
+  const removeRef = useRef<() => void>(() => {});
 
-  useLayoutEffect(() => {
-    if (!enable) return;
+  useEffect(() => {
+    if (!hard) return;
 
+    if (!armedRef.current) {
+      try {
+        const st = window.history.state || {};
+        window.history.pushState({ ...st, __back_trap: true }, '');
+        armedRef.current = true;
+      } catch {}
+    }
 
-    if (armedRef.current) return;
-    armedRef.current = true;
-
-    const href = window.location.href;
-
-    window.history.replaceState({ trap: true }, '', href);
-    window.history.pushState({ trap: true }, '', href);
-
-    const onPopState = (e: PopStateEvent) => {
-      if ((e.state && (e.state as any).trap) || !e.state) {
-        window.history.pushState({ trap: true }, '', href);
-        window.location.reload();
+    const onPop = (e: PopStateEvent) => {
+      try {
+        window.history.go(1);
+      } catch {
+        const st = (e.state ?? {}) as any;
+        window.history.pushState({ ...st, __back_trap: true }, '');
       }
     };
 
-    window.addEventListener('popstate', onPopState);
+    window.addEventListener('popstate', onPop);
+    removeRef.current = () => window.removeEventListener('popstate', onPop);
+
     return () => {
-      window.removeEventListener('popstate', onPopState);
-      armedRef.current = false;
+      removeRef.current();
     };
-  }, [enable]);
+  }, [hard]);
+
+  return removeRef.current;
 }

@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Users, CheckCircle, Clock } from 'lucide-react';
 import { scenarioPersonaPairs } from './constants';
 import { useSession } from '../../providers/SessionProvider';
-
+import { useBackTrap } from '../../hooks/useBackTrap.ts';
 const ScenarioVotingComponent = ({ 
   onVotingComplete,
   onVotingStarted 
 }) => {
+  useBackTrap(true);
   const { sessionId, members, socket } = useSession();
   const [votingState, setVotingState] = useState('waiting'); // types: 'waiting', 'active', 'complete'
   const [votes, setVotes] = useState({}); // { scenarioId: voteCount }
