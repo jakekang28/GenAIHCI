@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Users, Clock, HelpCircle, Lightbulb, Target } from 'lucide-react';
+import { Users, Clock, HelpCircle, Lightbulb, Target } from 'lucide-react';
 import VotingComponent from '../shared/VotingComponent';
 import { useSession } from '../../providers/SessionProvider';
 
@@ -8,114 +8,91 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
   const [myHmwQuestions, setMyHmwQuestions] = useState(['', '', '']);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [contributions, setContributions] = useState([]);
-  const [phase, setPhase] = useState('create'); // types: 'create', 'voting', 'results'
-  //Util Functions
+  const [phase, setPhase] = useState('create'); // 'create' | 'voting' | 'results'
+  const [votingStarted, setVotingStarted] = useState(false);
+
+  // ---------- reset listener (새 라운드 시작 시 상태 초기화) ----------
+  useEffect(() => {
+    if (!socket) return;
+    const onTypeReset = (d) => {
+      if (d?.type !== 'hmw_question') return;
+      setContributions([]);
+      setHasSubmitted(false);
+      setMyHmwQuestions(['', '', '']);
+      setPhase('create');
+      setVotingStarted(false);
+    };
+    socket.on('room:type_reset', onTypeReset);
+    return () => socket.off('room:type_reset', onTypeReset);
+  }, [socket]);
+
+  // ---------- util: 정규화 & 중복 방지 ----------
   const toArray = (x) => (Array.isArray(x) ? x : x ? [x] : []);
   const normHmw = (c) => {
-    console.log('🔍 [CollaborativeHMWCreation] normHmw called with:', c);
     const content = typeof c?.content === 'string' ? { question: c.content } : (c?.content ?? {});
-    const normalized = {
-    ...c,
-    content,
-    userId: c?.userId ?? c?.content?.userId,
-    socketId: c?.socketId ?? c?.content?.socketId,
-    authorId: c?.authorId ?? c?.content?.authorId,
+    return {
+      ...c,
+      content,
+      userId: c?.userId ?? c?.content?.userId,
+      socketId: c?.socketId ?? c?.content?.socketId,
+      authorId: c?.authorId ?? c?.content?.authorId,
     };
-    console.log('🔍 [CollaborativeHMWCreation] normHmw result:', normalized);
-    return normalized;
-  }
+  };
   const hmwKey = (x) => {
     const a = x.userId || x.authorId || x.socketId || 'u';
     const id = x.id;
-    if (id) {
-      console.log('🔍 [CollaborativeHMWCreation] hmwKey using id:', id);
-      return id;
-    }
+    if (id) return id;
     const ord = x.content?.order;
-    if (ord != null) {
-      const key = `${a}::ord:${ord}`;
-      console.log('🔍 [CollaborativeHMWCreation] hmwKey using order:', key);
-      return key;
-    }
+    if (ord != null) return `${a}::ord:${ord}`;
     const q = (x.content?.question || '').trim().toLowerCase();
-    const key = `${a}::q:${q}`;
-    console.log('🔍 [CollaborativeHMWCreation] hmwKey using question:', key);
-    return key;
-  }
+    return `${a}::q:${q}`;
+  };
   const upsertHmwByStableId = (prev, incomingRaw) => {
-    console.log('🔍 [CollaborativeHMWCreation] upsertHmwByStableId called with:', {
-      prevCount: prev.length,
-      incomingCount: incomingRaw.length,
-      prev: prev,
-      incoming: incomingRaw
-    });
-    
     const prevN = prev.map(normHmw);
     const incN  = incomingRaw.map(normHmw);
     const map = new Map(prevN.map((p) => [hmwKey(p), p]));
-    
-    console.log('🔍 [CollaborativeHMWCreation] Normalized data:', {
-      prevNormalized: prevN,
-      incomingNormalized: incN
-    });
-    
     for (const n of incN) {
       const k = hmwKey(n);
-      console.log('🔍 [CollaborativeHMWCreation] Processing incoming item:', {
-        item: n,
-        key: k,
-        existing: map.get(k)
-      });
       map.set(k, { ...(map.get(k) ?? {}), ...n });
     }
-    
-    const result = Array.from(map.values());
-    console.log('🔍 [CollaborativeHMWCreation] upsertHmwByStableId result:', {
-      resultCount: result.length,
-      result: result
-    });
-    
-    return result;
-  }
+    return Array.from(map.values());
+  };
+
+  // ---------- 소켓 이벤트 ----------
   useEffect(() => {
     if (!socket) return;
 
-    // Listen for contributions from other members
     const handleContributions = (data) => {
-      console.log('🔍 [CollaborativeHMWCreation] handleContributions received:', data);
       if (data?.type !== 'hmw_question') return;
-      const incoming = Array.isArray(data?.contributions) ? data.contributions : toArray(data)
+      const incoming = Array.isArray(data?.contributions) ? data.contributions : toArray(data);
       if (!incoming.length) return;
-      console.log('🔍 [CollaborativeHMWCreation] Processing incoming contributions:', incoming);
       setContributions((prev) => upsertHmwByStableId(prev, incoming));
     };
 
     const handlePhaseChange = (data) => {
-      if (data.stage) {
-        setPhase(data.stage);
-      }
+      if (data.stage) setPhase(data.stage);
     };
-     const handleContributionAck = (ack) => {
-      console.log('🔍 [CollaborativeHMWCreation] handleContributionAck received:', ack);
+
+    const handleContributionAck = (ack) => {
       if (!ack?.ok || !ack?.contribution) return;
-      console.log('🔍 [CollaborativeHMWCreation] Processing contribution ack:', ack.contribution);
       setContributions((prev) => upsertHmwByStableId(prev, [ack.contribution]));
     };
+
     const handleVotingStarted = (data) => {
-      console.log('🔍 [CollaborativeHMWCreation] handleVotingStarted received:', data);
       if (data?.type !== 'hmw_question') return;
       if (data?.roomId && data.roomId !== sessionId) return;
       setPhase('voting');
+      setVotingStarted(true);
       if (data?.contributions) {
-        console.log('🔍 [CollaborativeHMWCreation] Setting contributions from voting started:', data.contributions);
         setContributions(upsertHmwByStableId([], data.contributions));
       }
     };
+
     socket.on('room:voting_started', handleVotingStarted);
     socket.on('room:contributions', handleContributions);
     socket.on('room:contribution:ack', handleContributionAck);
     socket.on('room:stage', handlePhaseChange);
-    socket.on('session:stage', handlePhaseChange); // Legacy support
+    socket.on('session:stage', handlePhaseChange);
 
     return () => {
       socket.off('room:voting_started', handleVotingStarted);
@@ -126,20 +103,23 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
     };
   }, [socket, sessionId]);
 
+  // ---------- 입력/제출 ----------
   const updateHmwQuestion = (index, value) => {
-    const newQuestions = [...myHmwQuestions];
-    newQuestions[index] = value;
-    setMyHmwQuestions(newQuestions);
+    const next = [...myHmwQuestions];
+    next[index] = value;
+    setMyHmwQuestions(next);
   };
 
   const submitHmwQuestions = () => {
     if (!socket) return;
 
-    const validQuestions = myHmwQuestions.filter(q => q.trim());
+    const validQuestions = myHmwQuestions.filter((q) => q.trim());
     if (validQuestions.length === 0) return;
+
     const me = members?.find((m) => m.socketId === socket.id);
     const myUserId = me?.userId || undefined;
     const myUserName = me?.userName || 'You';
+
     const baseMeta = {
       roomId: sessionId,
       type: 'hmw_question',
@@ -149,17 +129,15 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
       userName: myUserName,
       saveToDb: true,
     };
-    
-    console.log('🔍 [CollaborativeHMWCreation] Submitting HMW questions:', validQuestions);
-    
-    // Submit each question as a separate contribution
+
+    // 각 질문을 독립 기여로 전송 (안전한 stable id 부여)
     validQuestions.forEach((question, index) => {
       const order = index + 1;
-      const stableId = `${myUserId || socket.id}:hmw:${order}`
+      const stableId = `${myUserId || socket.id}:hmw:${order}`;
       const contribution = {
         ...baseMeta,
         id: stableId,
-        content :{
+        content: {
           question: question.trim(),
           povStatement,
           needs: needs.filter((n) => n.trim()),
@@ -170,41 +148,38 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
           socketId: socket.id,
           authorId: myUserId || socket.id,
           userName: myUserName,
-        }
+        },
       };
 
-      console.log('🔍 [CollaborativeHMWCreation] Emitting contribution:', contribution);
       socket.emit('room:contribution:submit', contribution);
-      
-      // Don't add to local state here - wait for server acknowledgment to avoid duplicates
-      // setContributions((prev) => upsertHmwByStableId(prev, [contribution]));
+      // 중복 방지를 위해 ack로만 반영 (이미 그렇게 처리 중)
     });
 
     setHasSubmitted(true);
   };
 
   const handleVotingComplete = (selectedQuestions, results) => {
-    console.log('HMW voting complete:', selectedQuestions);
-    // selectedQuestions -> array of the top 3 voted HMW questions
-    const texts = (selectedQuestions || []).map((q) => q?.content?.question || q?.content || '');
-    
-    // Send final selection to backend
+    const texts = (selectedQuestions || []).map(
+      (q) => q?.content?.question || q?.content || ''
+    );
+
     if (socket && selectedQuestions && selectedQuestions.length > 0) {
-      // Use database ID if available, otherwise skip this contribution
       const selectedIds = selectedQuestions
-        .map(q => q.id || q.databaseId) // Try both id and databaseId
-        .filter(id => id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
-      
-      console.log('Selected database IDs for final selection:', selectedIds);
-      
+        .map((q) => q.id || q.databaseId)
+        .filter(
+          (id) =>
+            id &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+        );
+
       socket.emit('room:final_selection', {
         roomId: sessionId,
         type: 'hmw_question',
         selectedContent: texts,
-        selectedContributionIds: selectedIds
+        selectedContributionIds: selectedIds,
       });
     }
-    
+
     onContinue(texts);
   };
 
@@ -213,10 +188,11 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
     socket.emit('room:start_voting', {
       roomId: sessionId,
       type: 'hmw_question',
-      maxSelections: 3 // Allow selecting top 3 HMW questions
+      maxSelections: 3,
     });
   };
 
+  // ---------- UI ----------
   const renderPovContext = () => (
     <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6 mb-6 border border-purple-200">
       <h3 className="text-lg font-semibold text-purple-800 mb-4 flex items-center">
@@ -230,8 +206,6 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
   );
 
   const renderHmwList = () => {
-    console.log('🔍 [CollaborativeHMWCreation] renderHmwList - current contributions:', contributions);
-    
     if (contributions.length === 0) {
       return (
         <div className="text-center py-8 text-gray-500">
@@ -241,32 +215,28 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
       );
     }
 
-    // Group contributions by user
-    const groupedContributions = {};
-    contributions.forEach(contribution => {
-      const userId = contribution.userId || contribution.socketId || contribution.authorId || 'unknown';
-      if (!groupedContributions[userId]) {
-        groupedContributions[userId] = {
-          userName: contribution.userName || 'Team Member',
-          questions: []
-        };
+    const grouped = {};
+    contributions.forEach((c) => {
+      const userId = c.userId || c.socketId || c.authorId || 'unknown';
+      if (!grouped[userId]) {
+        grouped[userId] = { userName: c.userName || 'Team Member', questions: [] };
       }
-      groupedContributions[userId].questions.push(contribution);
+      grouped[userId].questions.push(c);
     });
-
-    console.log('🔍 [CollaborativeHMWCreation] renderHmwList - grouped contributions:', groupedContributions);
 
     return (
       <div className="space-y-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">
-          Team HMW Questions ({Object.keys(groupedContributions).length}/{members.length} members)
+          Team HMW Questions ({Object.keys(grouped).length}/{members.length} members)
         </h3>
-        {Object.values(groupedContributions).map((userGroup, userIndex) => (
-          <div key={userIndex} className="bg-white border border-gray-200 rounded-lg p-4">
+        {Object.values(grouped).map((userGroup, i) => (
+          <div key={i} className="bg-white border border-gray-200 rounded-lg p-4">
             <div className="flex items-center space-x-2 mb-3">
               <Users className="h-5 w-5 text-green-500" />
               <p className="font-medium text-gray-800">{userGroup.userName}</p>
-              <span className="text-sm text-gray-500">({userGroup.questions.length} questions)</span>
+              <span className="text-sm text-gray-500">
+                ({userGroup.questions.length} questions)
+              </span>
             </div>
             <div className="space-y-2">
               {userGroup.questions.map((contribution, qIndex) => (
@@ -291,14 +261,10 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          {/* <button
-            onClick={onBack}
-            className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors"
-          >
+          {/* <button onClick={onBack} className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors">
             <ArrowLeft className="h-5 w-5" />
             <span>Back</span>
           </button> */}
-          
           <div className="text-right">
             <p className="text-sm text-gray-600">Room: {sessionId?.slice(-6)?.toUpperCase()}</p>
           </div>
@@ -325,7 +291,7 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
               <Lightbulb className="h-6 w-6 text-yellow-500 mr-2" />
               Create Your HMW Questions
             </h2>
-            
+
             <div className="space-y-6">
               {myHmwQuestions.map((question, index) => (
                 <div key={index}>
@@ -357,9 +323,9 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
 
               <button
                 onClick={submitHmwQuestions}
-                disabled={!myHmwQuestions.every(q => q.trim().length > 0) || hasSubmitted}
+                disabled={!myHmwQuestions.every((q) => q.trim().length > 0) || hasSubmitted}
                 className="w-full bg-green-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-              > mn    
+              >
                 {hasSubmitted ? '✓ HMW Questions Submitted' : 'Submit HMW Questions'}
               </button>
             </div>
@@ -378,7 +344,7 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
                 </button>
               )}
             </div>
-            
+
             {renderHmwList()}
           </div>
         </div>
@@ -390,9 +356,7 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-6">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Vote for the Top 3 HMW Questions
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">Vote for the Top 3 HMW Questions</h1>
           <p className="text-gray-600">
             Select the questions that will lead to the most innovative solutions
           </p>
@@ -413,7 +377,6 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
     </div>
   );
 
-  // Render based on current phase
   switch (phase) {
     case 'voting':
       return renderVotingPhase();

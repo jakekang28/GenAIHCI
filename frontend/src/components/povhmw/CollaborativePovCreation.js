@@ -11,6 +11,9 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
   const [phase, setPhase] = useState('create'); // types:'create', 'voting', 'results'
   const [povWinner, setPovWinner] = useState(null);
 
+  // ✅ reset 이후 도착하는 과거 데이터 무시를 위한 기준 시각
+  const [resetAt, setResetAt] = useState(0);
+
   // --- helper: 결과/기여 객체에서 안전하게 텍스트 추출 ---
   const extractWinnerText = (winnerLike) => {
     if (!winnerLike) return '';
@@ -41,6 +44,7 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
       type: c?.type ?? 'pov_statement',
       content,
       raw: c,
+      timestamp: c?.timestamp, // 서버가 주는 timestamp 유지
     };
   };
 
@@ -69,18 +73,44 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
   };
   // End util
 
+  // ✅ 타입별 리셋 수신: 로컬 상태 비우고 기준 시각 저장
+  useEffect(() => {
+    if (!socket) return;
+    const onTypeReset = (d) => {
+      if (d?.type !== 'pov_statement') return;
+      setResetAt(Date.now());
+      setContributions([]);
+      setHasSubmitted(false);
+      setMyPovStatement('');
+      setPhase('create');
+      setPovWinner(null);
+    };
+    socket.on('room:type_reset', onTypeReset);
+    return () => socket.off('room:type_reset', onTypeReset);
+  }, [socket]);
+
   useEffect(() => {
     if (!socket) return;
 
     const handleContributions = (data) => {
-      if (data.type === 'pov_statement') {
-        const incoming = toArray(data?.contributions?.length ? data.contributions : data);
-        setContributions((prev) => upsertByIdentity(prev, incoming));
-      }
+      if (data.type !== 'pov_statement') return;
+      const list = toArray(Array.isArray(data?.contributions) ? data.contributions : data);
+
+      // ✅ reset 이후만 반영 (timestamp 누락 대비 0 처리)
+      const filtered = resetAt
+        ? list.filter((c) => {
+            const t = Date.parse(c?.timestamp || '') || 0;
+            return t >= resetAt;
+          })
+        : list;
+
+      if (!filtered.length) return;
+      setContributions((prev) => upsertByIdentity(prev, filtered));
     };
 
     const handleContributionAck = (ack) => {
       if (!ack?.ok || !ack?.contribution) return;
+      // ACK는 항상 최신이므로 그대로 반영
       setContributions((prev) => upsertByIdentity(prev, [ack.contribution]));
     };
 
@@ -114,7 +144,7 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
       socket.off('room:stage', handlePhaseChange);
       socket.off('session:stage', handlePhaseChange);
     };
-  }, [socket, sessionId]);
+  }, [socket, sessionId, resetAt]);
 
   const submitPovStatement = () => {
     if (!socket || !socket.id || !myPovStatement.trim()) return;
@@ -141,7 +171,7 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
     };
 
     socket.emit('room:contribution:submit', mine);
-    setContributions((prev) => upsertByIdentity(prev, [mine]));
+    // ❌ 즉시 로컬 추가하지 않음 — 중복/레이스 방지 (ACK에서 반영)
     setHasSubmitted(true);
   };
 
