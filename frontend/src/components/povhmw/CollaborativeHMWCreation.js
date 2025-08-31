@@ -227,7 +227,7 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
     return (
       <div className="space-y-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">
-          Team HMW Questions ({Object.keys(grouped).length}/{members.length} members)
+          Team HMW Questions
         </h3>
         {Object.values(grouped).map((userGroup, i) => (
           <div key={i} className="bg-white border border-gray-200 rounded-lg p-4">
@@ -336,12 +336,20 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-800">Team HMW Questions</h2>
               {contributions.length > 0 && (
-                <button
-                  onClick={startVoting}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                >
-                  Start Voting
-                </button>
+                <div className="flex items-center space-x-3">
+                  {(() => {
+                    // Check if all members have submitted HMWs
+                    const uniqueMembersSubmitted = new Set(contributions.map(c => c.userId || c.socketId || c.authorId)).size;
+                    return uniqueMembersSubmitted >= members.length;
+                  })() ? (
+                    <button
+                      onClick={startVoting}
+                      className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                    >
+                      Start Voting
+                    </button>
+                  ) : null}
+                </div>
               )}
             </div>
 

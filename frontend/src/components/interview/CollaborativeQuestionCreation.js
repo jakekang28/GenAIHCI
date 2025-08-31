@@ -204,8 +204,30 @@ const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue })
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <h2 className="text-xl font-bold text-gray-800 mb-4">Selected Scenario</h2>
           <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-            <h3 className="font-semibold text-blue-800 mb-2">{selectedScenario?.persona?.name} - {selectedScenario?.persona?.role}</h3>
-            <p className="text-blue-700 text-sm leading-relaxed">{selectedScenario?.description}</p>
+            {/* Persona Section */}
+            <div className="flex items-start space-x-4 mb-4">
+              <div className="text-3xl flex-shrink-0">{selectedScenario?.persona?.image}</div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-blue-800 mb-1">{selectedScenario?.persona?.name} - {selectedScenario?.persona?.role}</h3>
+                <p className="text-blue-700 text-sm leading-relaxed">{selectedScenario?.persona?.description}</p>
+              </div>
+            </div>
+            
+            {/* Scenario Section */}
+            <div className="space-y-3">
+              <div>
+                <h4 className="font-semibold text-blue-800 text-sm mb-1">Scenario Question:</h4>
+                <p className="text-blue-700 text-sm leading-relaxed">{selectedScenario?.description}</p>
+              </div>
+              <div>
+                <h4 className="font-semibold text-blue-800 text-sm mb-1">Context:</h4>
+                <p className="text-blue-700 text-sm leading-relaxed">{selectedScenario?.context}</p>
+              </div>
+              <div>
+                <h4 className="font-semibold text-blue-800 text-sm mb-1">Sample Scenario:</h4>
+                <p className="text-blue-700 text-sm leading-relaxed">{selectedScenario?.scenario}</p>
+              </div>
+            </div>
           </div>
         </div>
         <div className="grid md:grid-cols-2 gap-8">

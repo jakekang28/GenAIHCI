@@ -200,7 +200,11 @@ const VotingComponent = ({
       roomId,
       usingPredefinedOptions
     });
-    if (selectedOptions.length === 0) return;
+    // Validate that user has selected exactly the required number of options
+    if (selectedOptions.length !== maxSelections) {
+      console.log(`[VotingComponent] Invalid selection count: ${selectedOptions.length}/${maxSelections}`);
+      return;
+    }
     if (usingPredefinedOptions) {
       // For predefined options, handle voting locally
       console.log(`[VotingComponent] Handling predefined options vote locally`);
@@ -309,6 +313,7 @@ const VotingComponent = ({
               </span>
             </div>
           </div>
+
         </div>
 
         <div className="space-y-4">
@@ -358,9 +363,17 @@ const VotingComponent = ({
             )}
             <button
               onClick={submitVote}
-              className="bg-teal-600 text-white border-none py-3 px-6 rounded-lg font-semibold cursor-pointer w-full text-base hover:bg-teal-700 transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 shadow-lg hover:shadow-xl"
+              disabled={selectedOptions.length !== maxSelections}
+              className={`border-none py-3 px-6 rounded-lg font-semibold cursor-pointer w-full text-base transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 shadow-lg hover:shadow-xl ${
+                selectedOptions.length === maxSelections
+                  ? 'bg-teal-600 text-white hover:bg-teal-700'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
             >
-              Submit Vote{selectedOptions.length > 1 ? 's' : ''} ✓
+              {selectedOptions.length === maxSelections 
+                ? `Submit Vote${selectedOptions.length > 1 ? 's' : ''} ✓`
+                : `Select ${maxSelections - selectedOptions.length} more option${maxSelections - selectedOptions.length !== 1 ? 's' : ''}`
+              }
             </button>
           </div>
         ) : hasVoted ? (

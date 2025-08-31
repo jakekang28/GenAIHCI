@@ -692,6 +692,35 @@ async handleRoomResetType(
         // For other types, use contributions as before
         votingOptions = this.getRoomContributions(roomId, type);
         this.logger.log(`Available contributions (${votingOptions.length}): ${JSON.stringify(votingOptions.map(c => ({id: c.id, content: c.content})))}`);
+        
+        // Validate that there are enough contributions to vote on
+        // For HMW questions, we need at least 3 contributions from at least 2 members
+        if (type === 'hmw_question') {
+          const uniqueMembersSubmitted = new Set(votingOptions.map(c => c.userId || c.socketId || c.authorId)).size;
+          if (uniqueMembersSubmitted < 2) {
+            this.logger.error(`Not enough members have submitted HMWs: ${uniqueMembersSubmitted} < 2`);
+            socket.emit('room:error', { 
+              message: `Need at least 2 team members to submit HMW questions. Currently have ${uniqueMembersSubmitted}.` 
+            });
+            return;
+          }
+          if (votingOptions.length < 3) {
+            this.logger.error(`Not enough HMW questions to vote on: ${votingOptions.length} < 3`);
+            socket.emit('room:error', { 
+              message: `Need at least 3 HMW questions to start voting. Currently have ${votingOptions.length}.` 
+            });
+            return;
+          }
+        } else {
+          // For other types, just check if there's at least 1 contribution
+          if (votingOptions.length < 1) {
+            this.logger.error(`No contributions to vote on for type ${type}`);
+            socket.emit('room:error', { 
+              message: `No ${type} contributions to vote on yet.` 
+            });
+            return;
+          }
+        }
       }
       if (Array.isArray(body?.limitOptionIds) && body.limitOptionIds.length) {
       votingOptions = votingOptions.filter((c: any) =>
@@ -782,13 +811,17 @@ async handleRoomResetType(
     const maxSelections: number = votingState.maxSelections;
     const votesByUser: Record<string, string[]> = votingState.votesByUser;
 
-    
-    const current = new Set<string>(votesByUser[member.userId] || []);
-    for (const id of optionIds) {
-      if (current.size < maxSelections) current.add(id);
-      
+    // Validate that user submitted exactly the required number of votes
+    if (optionIds.length !== maxSelections) {
+      this.logger.error(`User ${member.userName} submitted ${optionIds.length} votes but ${maxSelections} are required`);
+      socket.emit('room:error', { 
+        message: `You must select exactly ${maxSelections} option${maxSelections !== 1 ? 's' : ''} to vote` 
+      });
+      return;
     }
-    votesByUser[member.userId] = Array.from(current);
+
+    // Store the user's votes (replace any previous votes)
+    votesByUser[member.userId] = optionIds;
 
     
     votingState.votesByUser = votesByUser;

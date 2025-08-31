@@ -68,7 +68,7 @@ export class LangchainService implements OnModuleInit {
       openAIApiKey: process.env.OPENAI_API_KEY, 
       modelName: 'gpt-4o', 
       temperature: 0.3,
-      maxTokens: 150 //limit response length
+      maxTokens: 300
     });
     
     // Evaluator LLM for pre/post interview evaluations - temperature 0 for consistent scoring
