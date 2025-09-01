@@ -3,6 +3,7 @@ import { apiService } from '../services/apiService';
 import { buildQna } from './buildQna';
 import { useLocalGuest } from '../hooks/useLocalGuest';
 import { useSession } from '../providers/SessionProvider';
+import { useBackTrap } from '../hooks/useBackTrap.ts';
 
 // Shared Components
 import Home from './shared/Home';
@@ -24,6 +25,8 @@ import CollaborativeHMWCreation from './povhmw/CollaborativeHMWCreation';
 import FinalHmwAiFeedback from './povhmw/FinalHmwAiFeedback';
 
 const InterviewHMWSystem = () => {
+  useBackTrap(true);
+  
   const {
     guest,
     ensureGuest,

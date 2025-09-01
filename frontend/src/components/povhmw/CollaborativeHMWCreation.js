@@ -266,7 +266,7 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
             <span>Back</span>
           </button> */}
           <div className="text-right">
-            <p className="text-sm text-gray-600">Room: {sessionId?.slice(-6)?.toUpperCase()}</p>
+            <p className="text-sm text-gray-600">Room: {localStorage.getItem('roomCode') || sessionId?.slice(-6)?.toUpperCase()}</p>
           </div>
           <div>
             <p className="text-sm text-green-600 font-medium">{members.length} members</p>

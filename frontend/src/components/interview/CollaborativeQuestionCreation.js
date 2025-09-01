@@ -193,7 +193,7 @@ const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue })
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="text-right">
-            <p className="text-sm text-gray-600">Room: {sessionId?.slice(-6)?.toUpperCase()}</p>
+            <p className="text-sm text-gray-600">Room: {localStorage.getItem('roomCode') || sessionId?.slice(-6)?.toUpperCase()}</p>
           </div>
           <div>
             <p className="text-sm text-blue-600 font-medium">{members.length} members</p>
