@@ -128,12 +128,12 @@ const CollaborativeScenarioSelection = ({ onBack, onContinue, onPersonaSelection
                     
                     <div className="flex flex-col gap-2 mb-4">
                       <div className="bg-blue-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-700 leading-relaxed">
+                        <p className="text-sm text-gray-700 leading-relaxed">
                           <span className="font-semibold text-blue-800">Context:</span> {pair.context}
                         </p>
                       </div>
                       <div className="bg-blue-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-700 leading-relaxed">
+                        <p className="text-sm text-gray-700 leading-relaxed">
                           <span className="font-semibold text-blue-800">Sample Scenario:</span> {pair.scenario}
                         </p>
                       </div>

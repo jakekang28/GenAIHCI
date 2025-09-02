@@ -392,10 +392,10 @@ const VotingComponent = ({
   if (votingState === 'tie') {
     return (
       <div className="text-center py-8 px-6 fade-in">
-        <h3 className="text-xl font-semibold text-amber-600 mb-4 animate-pulse">
+        <h3 className="text-xl font-semibold text-green-600 mb-4 animate-pulse">
           🤝 It's a Tie!
         </h3>
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 text-amber-800 slide-in-up">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 text-green-800 slide-in-up">
           {tieMessage}
         </div>
         <button
@@ -403,19 +403,42 @@ const VotingComponent = ({
             if(!socket) return
             socket.emit('room:start_voting', { roomId, type, maxSelections });
           }}
-          className="bg-teal-600 text-white border-none py-3 px-6 rounded-lg font-semibold cursor-pointer hover:bg-teal-700 transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 shadow-lg hover:shadow-xl"
+          className="bg-green-600 text-white border-none py-3 px-6 rounded-lg font-semibold cursor-pointer hover:bg-green-700 transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 shadow-lg hover:shadow-xl"
         >
             Revote
         </button>
         <div className="mt-6 slide-in-up" style={{ animationDelay: '0.2s' }}>
           <h4 className="mb-4 text-gray-800 font-semibold">Results:</h4>
           <div className="space-y-3">
-            {results.map((result, index) => (
-              <div key={index} className="bg-white border border-gray-200 rounded-lg p-3 flex justify-between items-center hover:shadow-md transition-all duration-300" style={{ animationDelay: `${0.3 + index * 0.1}s` }}>
-                <span className="text-gray-700">Option {index + 1}</span>
-                <span className="font-semibold text-gray-800">{result.vote_count} vote{result.vote_count !== 1 ? 's' : ''}</span>
-              </div>
-            ))}
+            {results.map((result, index) => {
+              // Get the actual content for display
+              const contribution = result.contribution;
+              let displayText = `Option ${index + 1}`;
+              
+              if (contribution) {
+                if (contribution.content?.question) {
+                  displayText = contribution.content.question;
+                } else if (contribution.content?.statement) {
+                  displayText = contribution.content.statement;
+                } else if (typeof contribution.content === 'string') {
+                  displayText = contribution.content;
+                } else if (contribution.question) {
+                  displayText = contribution.question;
+                } else if (contribution.statement) {
+                  displayText = contribution.statement;
+                }
+              }
+              
+              return (
+                <div key={index} className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-all duration-300" style={{ animationDelay: `${0.3 + index * 0.1}s` }}>
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-gray-700 font-medium">Question {index + 1}</span>
+                    <span className="font-semibold text-gray-800">{result.vote_count} vote{result.vote_count !== 1 ? 's' : ''}</span>
+                  </div>
+                  <p className="text-gray-600 text-sm leading-relaxed text-left">{displayText}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

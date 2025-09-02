@@ -646,12 +646,12 @@ const InterviewHMWSystem = () => {
                  {/* Context */}
                  <div className="flex flex-col gap-2">
                  <div className="bg-blue-50 p-3 rounded-lg">
-                   <p className="text-xs text-gray-700 leading-relaxed">
+                   <p className="text-sm text-gray-700 leading-relaxed">
                      <span className="font-semibold text-blue-800">Context:</span> {pair.context}
                    </p>
                  </div>
                  <div className="bg-blue-50 p-3 rounded-lg">
-                   <p className="text-xs text-gray-700 leading-relaxed">
+                   <p className="text-sm text-gray-700 leading-relaxed">
                      <span className="font-semibold text-blue-800">Sample Scenario:</span> {pair.scenario}
                    </p>
                  </div>
@@ -1068,7 +1068,12 @@ const InterviewHMWSystem = () => {
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-3xl font-bold text-gray-800">Interview Session</h1>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800">Interview Session</h1>
+              <p className="text-lg text-gray-600 mt-2">
+                <span className="font-semibold">Scenario Question:</span> {selectedScenario.description}
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center mb-6">

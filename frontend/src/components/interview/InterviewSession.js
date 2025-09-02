@@ -197,7 +197,12 @@ const InterviewSession = ({
       <div className="max-w-4xl mx-auto w-full">
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-3xl font-bold text-gray-800">Interview Session</h1>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800">Interview Session</h1>
+              <p className="text-lg text-gray-600 mt-2">
+                <span className="font-semibold">Scenario Question:</span> {selectedScenario.description}
+              </p>
+            </div>
           </div>
           <div className="flex items-center mb-6">
             <div className="text-4xl mr-4">{selectedScenario.persona.image}</div>
