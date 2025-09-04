@@ -131,7 +131,6 @@ const AIQuestionFeedback = ({
               <li>• Remember to listen actively and ask follow-up questions based on their responses</li>
               <li>• Look for emotional cues and dig deeper into feelings and motivations</li>
               <li>• Keep the conversation focused on their experience rather than solutions</li>
-              <li>• Ask "why" questions to uncover deeper insights</li>
             </ul>
           </div>
 

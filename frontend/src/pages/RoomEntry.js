@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import apiService from '../services/apiService';
 import { Users, Plus, LogIn, User, Hash } from 'lucide-react';
 import config from '../config/config.js';
+import HelpButton from '../components/shared/HelpButton';
 
 const API_BASE = config.BACKEND_URL;
 
@@ -141,8 +142,33 @@ export default function RoomEntry() {
     }
   };
 
+  const helpContent = (
+    <div>
+      <h3 className="text-lg font-semibold mb-4">Room Creation - Step 1</h3>
+      <div className="space-y-4">
+        <div>
+          <h4 className="font-medium text-gray-800 mb-2">For Group Leaders:</h4>
+          <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
+            <li>Enter your name in the "Your Name" field</li>
+            <li>Click "Create New Room" to start a session</li>
+            <li>Share the generated room code (e.g., "ABC123") with your team members</li>
+          </ol>
+        </div>
+        <div>
+          <h4 className="font-medium text-gray-800 mb-2">For Participants:</h4>
+          <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
+            <li>Enter your name in the "Your Name" field</li>
+            <li>Enter the room code shared by your group leader</li>
+            <li>Click "Join Room" to enter the session</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6 flex items-center justify-center">
+      <HelpButton content={helpContent} title="Room Creation Help" />
       <div className="max-w-6xl mx-auto w-full">
         <div className="text-center mb-12 fade-in">
           <h1 className="text-5xl font-bold text-gray-800 mb-4">Room Management</h1>

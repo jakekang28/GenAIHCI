@@ -1071,7 +1071,7 @@ const InterviewHMWSystem = () => {
             <div>
               <h1 className="text-3xl font-bold text-gray-800">Interview Session</h1>
               <p className="text-lg text-gray-600 mt-2">
-                <span className="font-semibold">Scenario Question:</span> {selectedScenario.description}
+                <span className="font-semibold">Interview Goal:</span> {selectedScenario.description}
               </p>
             </div>
           </div>
@@ -1089,7 +1089,7 @@ const InterviewHMWSystem = () => {
             {chatMessages.length === 0 && (
               <div className="text-center text-gray-500 mt-20">
                 <MessageCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Start the interview by asking your pre-planned question below.</p>
+                <p>Start the interview by asking your Pre-planned Opening question below.</p>
               </div>
             )}
             

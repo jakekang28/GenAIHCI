@@ -344,11 +344,6 @@ const VotingComponent = ({
                  option.content?.statement || option.content?.question || 
                  JSON.stringify(option.content)}
               </div>
-              {option.userName && (
-                <div className="text-sm text-gray-500">
-                  by {option.userName}
-                </div>
-              )}
             </div>
           ))}
         </div>

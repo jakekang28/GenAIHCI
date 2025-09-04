@@ -234,9 +234,6 @@ const CollaborativePovCreation = ({ needs, insights, onBack, onContinue }) => {
                 <Target className="h-5 w-5 text-purple-500 mt-1" />
               </div>
               <div className="flex-1">
-                <p className="font-medium text-gray-800 mb-1">
-                  {contribution.userName || 'Team Member'}
-                </p>
                 <p className="text-gray-600 leading-relaxed">
                   {contribution.content?.statement || contribution.content}
                 </p>

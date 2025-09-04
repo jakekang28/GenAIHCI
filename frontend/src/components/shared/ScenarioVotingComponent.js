@@ -344,7 +344,7 @@ const ScenarioVotingComponent = ({
           ) : (
             <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-gray-600">
               <p className="text-gray-600 text-sm">
-                💡 Click on any scenario card above to select your choice
+                Click on any scenario card above to select your choice
               </p>
             </div>
           )}

@@ -14,7 +14,7 @@ It should start with "How might we…"and avoid suggesting any specific solution
 -- Focus on user needs: "Does the question clearly reflect a genuine user problem or need revealed during research, whether emotional, cognitive, environmental, or workflow-related?"
 -- Open-endedness: "Does the question allow for a wide range of creative design directions, while being clear and focused enough to inspire actionable ideas? A 5 means the question opens a clear design space without being vague or overly broad. Deduct if it’s too open to inspire focused ideation.”"
 -- Balance of specificity and generality: "Is the scope of the question narrow enough to be useful, but broad enough to inspire multiple ideas?"
--- Emotional Resonance: "Does the question hint at hint at emotional challenges either explicitly (e.g., stress, burnout) or implicitly (e.g., cognitive overload, chaotic environments)?"
+-- Emotional Resonance: "Does the question hint at emotional challenges either explicitly (e.g., stress, burnout) or implicitly (e.g., cognitive overload, chaotic environments)?"
 
 ###End of Rubrics###
 
@@ -23,6 +23,11 @@ It should start with "How might we…"and avoid suggesting any specific solution
 
 ###Scoring Instructions###
 Evaluate each HMW question individually and format your response EXACTLY as follows for each question:
+
+For each rubric, be SPECIFIC about:
+1. The exact words or phrases that caused the problem
+2. Which part of the rubric standard was violated
+3. What specifically made it bad
 
 **Question [NUMBER]: [HMW_QUESTION_TEXT]**
 
@@ -38,4 +43,4 @@ Evaluate each HMW question individually and format your response EXACTLY as foll
 **Emotional Resonance: [SCORE]**
 - Deduction Reason: [Your detailed explanation here]
 
-Start with the maximum score of 5, and only deduct points when there is a clear and meaningful issue that limits the question’s ability to reflect needs, inspire ideas, or connect emotionally. Specify exactly what idea or phrase causes the deduction.
+Start with the maximum score of 5, and only deduct points when there is a clear and meaningful issue that limits the question's ability to reflect needs, inspire ideas, or connect emotionally. Specify exactly what idea or phrase causes the deduction.

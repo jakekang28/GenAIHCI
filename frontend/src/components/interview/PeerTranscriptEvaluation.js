@@ -4,6 +4,7 @@ import { useSession } from '../../providers/SessionProvider';
 import { useLocalGuest } from '../../hooks/useLocalGuest';
 import { apiService } from '../../services/apiService';
 import { useBackTrap } from '../../hooks/useBackTrap.ts';
+import HelpButton from '../shared/HelpButton';
 const PeerTranscriptEvaluation = ({ 
   chatMessages, 
   selectedGroupQuestion, 
@@ -348,8 +349,40 @@ const PeerTranscriptEvaluation = ({
     );
   }
 
+  const helpContent = (
+    <div>
+      <h3 className="text-lg font-semibold mb-4">Review the Interview and Discuss Your Results</h3>
+      <div className="space-y-4">
+        <div>
+          <h4 className="font-medium text-gray-800 mb-2">What to do:</h4>
+          <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
+            <li>Review your own interview transcript first</li>
+            <li>Once every member finishes their interview, review your teammates' transcripts</li>
+            <li>Compare different approaches to follow-up questions</li>
+            <li>Note what techniques were most effective</li>
+          </ol>
+        </div>
+        <div>
+          <h4 className="font-medium text-gray-800 mb-2">Discussion points:</h4>
+          <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+            <li>What went well in each interview?</li>
+            <li>What could be improved?</li>
+            <li>Which follow-up questions were most effective?</li>
+            <li>What insights did you gain about the persona?</li>
+          </ul>
+        </div>
+        <div className="bg-blue-50 p-3 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <strong>Goal:</strong> Learn from each other's interview techniques and identify best practices for conducting user interviews.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 p-6 flex items-center justify-center">
+      <HelpButton content={helpContent} title="Transcript Review Help" />
       <div className="max-w-6xl mx-auto w-full">
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-6">Interview Transcripts Review</h1>

@@ -36,6 +36,11 @@ Provide qualitative feedback based on the rubric above
 Write in a friendly, supportive tone
 Do not rewrite or fix the question
 
+Be SPECIFIC in your feedback by:
+1. Identifying the exact words or phrases that caused the problem
+2. Explaining which part of the rubric standard was violated
+3. Describing what specifically made it problematic
+
 ### IMPORTANT ###
 Output should ONLY be in the following JSON object format. Do not include any other text, explanations, or formatting outside the JSON.
 {"mistakes" : "Closed Questions", "response" : "Example Explanation"}.

@@ -233,9 +233,8 @@ const CollaborativeHMWCreation = ({ needs, insights, povStatement, onBack, onCon
           <div key={i} className="bg-white border border-gray-200 rounded-lg p-4">
             <div className="flex items-center space-x-2 mb-3">
               <Users className="h-5 w-5 text-green-500" />
-              <p className="font-medium text-gray-800">{userGroup.userName}</p>
               <span className="text-sm text-gray-500">
-                ({userGroup.questions.length} questions)
+                {userGroup.questions.length} questions
               </span>
             </div>
             <div className="space-y-2">

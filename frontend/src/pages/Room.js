@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useSession } from '../providers/SessionProvider';
 import { Users, Share2, Play, Wifi, WifiOff, ArrowLeft } from 'lucide-react';
 import ConfirmButton from '../components/shared/ConfirmButton';
+import HelpButton from '../components/shared/HelpButton';
 export default function Room() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
@@ -71,8 +72,34 @@ export default function Room() {
     socket.on('room:session_started', handleStarted);
     return () => socket.off('room:session_started', handleStarted);
   }, [socket, sessionId, navigate]);
+
+  const helpContent = (
+    <div>
+      <h3 className="text-lg font-semibold mb-4">Room Session Help</h3>
+      <div className="space-y-4">
+        <div>
+          <h4 className="font-medium text-gray-800 mb-2">What you can see here:</h4>
+          <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+            <li><strong>Room Code:</strong> Share this code with team members who haven't joined yet</li>
+            <li><strong>Current Members:</strong> See who has joined your session</li>
+            <li><strong>Connection Status:</strong> Green means connected, red means disconnected</li>
+          </ul>
+        </div>
+        <div>
+          <h4 className="font-medium text-gray-800 mb-2">Next Steps:</h4>
+          <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
+            <li>Wait for all team members to join (3-4 students recommended)</li>
+            <li>Once ready, particpants should click "Confirm"</li>
+            <li>After all participants press "Confirm", the group leader can begin the session</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6 flex items-center justify-center">
+      <HelpButton content={helpContent} title="Room Session Help" />
       <div className="max-w-4xl mx-auto w-full">
         {/* Header Section */}
         <div className="mb-8">

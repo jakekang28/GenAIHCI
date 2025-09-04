@@ -4,6 +4,7 @@ import { useSession } from '../../providers/SessionProvider';
 import { useLocalGuest } from '../../hooks/useLocalGuest';
 import { apiService } from '../../services/apiService';
 import { useBackTrap } from '../../hooks/useBackTrap.ts';
+import HelpButton from '../shared/HelpButton';
 const InterviewSession = ({ 
   selectedScenario, 
   selectedGroupQuestion, 
@@ -192,24 +193,80 @@ const InterviewSession = ({
     onContinue(chatMessages);
   };
 
+  const helpContent = (
+    <div>
+      <h3 className="text-lg font-semibold mb-4">AI-Persona Simulated Interview</h3>
+      <div className="space-y-4">
+        <div>
+          <h4 className="font-medium text-gray-800 mb-2">How the interview works:</h4>
+          <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
+            <li>Begin with the pre-planned opening question (voted for by your team)</li>
+            <li>Read the AI persona's response carefully</li>
+            <li>Write three follow-up questions based on their response</li>
+            <li>Submit each follow-up question to continue the conversation</li>
+          </ol>
+        </div>
+        <div>
+          <h4 className="font-medium text-gray-800 mb-2">Tips for good follow-up questions:</h4>
+          <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+            <li>Ask for specific examples or stories</li>
+            <li>Dig deeper into interesting points they mentioned</li>
+            <li>Explore their emotions and motivations</li>
+            <li>Ask about challenges or pain points</li>
+          </ul>
+        </div>
+        <div className="bg-blue-50 p-3 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <strong>Goal:</strong> Practice active listening and asking meaningful follow-up questions that reveal user insights.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 to-green-100 p-6 flex items-center justify-center">
+      <HelpButton content={helpContent} title="Interview Session Help" />
       <div className="max-w-4xl mx-auto w-full">
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-800">Interview Session</h1>
               <p className="text-lg text-gray-600 mt-2">
-                <span className="font-semibold">Scenario Question:</span> {selectedScenario.description}
+                <span className="font-semibold">Interview Goal:</span> {selectedScenario.description}
               </p>
             </div>
           </div>
-          <div className="flex items-center mb-6">
-            <div className="text-4xl mr-4">{selectedScenario.persona.image}</div>
-            <div>
-              <h3 className="text-xl font-bold text-gray-800">{selectedScenario.persona.name}</h3>
-              <p className="text-teal-600">● Online</p>
-              <p className="text-sm text-gray-500 break-words overflow-hidden">{selectedScenario.persona.description}</p>
+          {/* Persona Section */}
+          <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 mb-6">
+            <div className="p-6 border-b border-gray-100">
+              <div className="flex items-start space-x-4">
+                <div className="text-3xl flex-shrink-0">{selectedScenario.persona.image}</div>
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-gray-800 mb-1">{selectedScenario.persona.name}</h3>
+                  <p className="text-teal-600 font-semibold text-sm mb-2">{selectedScenario.persona.role}</p>
+                  <p className="text-gray-600 text-sm leading-relaxed">{selectedScenario.persona.description}</p>
+                </div>
+                <div className="text-teal-600 text-sm font-medium">● Online</div>
+              </div>
+            </div>
+            
+            {/* Context and Scenario Section */}
+            <div className="p-6">
+
+              {/* Context */}
+              <div className="flex flex-col gap-2">
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    <span className="font-semibold text-blue-800">Context:</span> {selectedScenario.context}
+                  </p>
+                </div>
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    <span className="font-semibold text-blue-800">Sample Scenario:</span> {selectedScenario.scenario}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -217,7 +274,7 @@ const InterviewSession = ({
             {chatMessages.length === 0 && (
               <div className="text-center text-gray-500 mt-20">
                 <MessageCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Start the interview by asking your pre-planned question below.</p>
+                <p>Start the interview by asking your Pre-planned Opening question below.</p>
               </div>
             )}
             <div className="space-y-4">
@@ -358,3 +415,4 @@ const InterviewSession = ({
 };
 
 export default InterviewSession;
+

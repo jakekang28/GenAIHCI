@@ -3,6 +3,7 @@ import { ArrowLeft, ChevronRight, Users, Clock, Lightbulb } from 'lucide-react';
 import VotingComponent from '../shared/VotingComponent';
 import { useSession } from '../../providers/SessionProvider';
 import { useBackTrap } from '../../hooks/useBackTrap.ts';
+import HelpButton from '../shared/HelpButton';
 const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue }) => {
   const { sessionId, members, socket } = useSession();
   const [myQuestion, setMyQuestion] = useState('');
@@ -165,9 +166,6 @@ const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue })
                 <Users className="h-5 w-5 text-blue-500 mt-1" />
               </div>
               <div className="flex-1">
-                <p className="font-medium text-gray-800 mb-1">
-                  {contribution.userName || 'Team Member'}
-                </p>
                 <p className="text-gray-600 leading-relaxed">
                   {contribution.content?.question || contribution.content}
                 </p>
@@ -179,6 +177,28 @@ const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue })
     );
   };
 
+  const helpContent = (
+    <div>
+      <h3 className="text-lg font-semibold mb-4">Interview Questions Creation Help</h3>
+      <div className="space-y-4">
+        <div>
+          <h4 className="font-medium text-gray-800 mb-2">What to do:</h4>
+          <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
+            <li>Read the selected scenario and persona information carefully</li>
+            <li>Write one thoughtful interview question in the text box</li>
+            <li>Submit your question to the team collection</li>
+            <li>Wait for all team members to submit their questions</li>
+          </ol>
+        </div>
+        <div className="bg-blue-50 p-3 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <strong>Next:</strong> Once all questions are submitted, you'll vote for the best one to use in the interview.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderCreatePhase = () => {
     console.log('🎯 [CollaborativeQuestionCreation] Render state:', {
       contributions: contributions.length,
@@ -189,6 +209,7 @@ const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue })
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-6">
+        <HelpButton content={helpContent} title="Question Creation Help" />
         <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -216,7 +237,7 @@ const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue })
             {/* Scenario Section */}
             <div className="space-y-3">
               <div>
-                <h4 className="font-semibold text-blue-800 text-sm mb-1">Scenario Question:</h4>
+                <h4 className="font-semibold text-blue-800 text-sm mb-1">Interview Goal:</h4>
                 <p className="text-blue-700 text-sm leading-relaxed">{selectedScenario?.description}</p>
               </div>
               <div>
@@ -307,8 +328,31 @@ const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue })
     );
   };
 
+  const votingHelpContent = (
+    <div>
+      <h3 className="text-lg font-semibold mb-4">Vote For the Best Interview Question</h3>
+      <div className="space-y-4">
+        <div>
+          <h4 className="font-medium text-gray-800 mb-2">What to do:</h4>
+          <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
+            <li>Review all the questions submitted by your team members</li>
+            <li>Consider which question will provide the most valuable insights</li>
+            <li>Vote for the question you think is best</li>
+            <li>The highest voted question will be used for the interview</li>
+          </ol>
+        </div>
+        <div className="bg-blue-50 p-3 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <strong>Next:</strong> After voting, you'll see AI feedback on the selected question before starting the interview.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderVotingPhase = () => (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 p-6">
+      <HelpButton content={votingHelpContent} title="Voting Help" />
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
