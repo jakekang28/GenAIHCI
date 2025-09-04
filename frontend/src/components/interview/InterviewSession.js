@@ -206,15 +206,64 @@ const InterviewSession = ({
             <li>Submit each follow-up question to continue the conversation</li>
           </ol>
         </div>
+        
         <div>
-          <h4 className="font-medium text-gray-800 mb-2">Tips for good follow-up questions:</h4>
-          <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
-            <li>Ask for specific examples or stories</li>
-            <li>Dig deeper into interesting points they mentioned</li>
-            <li>Explore their emotions and motivations</li>
-            <li>Ask about challenges or pain points</li>
-          </ul>
+          <h4 className="font-medium text-gray-800 mb-2">What kinds of questions to ask:</h4>
+          <div className="space-y-3 text-sm text-gray-700">
+            <div>
+              <h5 className="font-medium text-gray-800 mb-1">Why Questions:</h5>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li>Why do you like it?</li>
+                <li>Why did you respond that way?</li>
+              </ul>
+            </div>
+            
+            <div>
+              <h5 className="font-medium text-gray-800 mb-1">How & What Questions:</h5>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li>How do you use this in your daily routine?</li>
+                <li>What does this situation look like for you in practice?</li>
+              </ul>
+            </div>
+            
+            <div>
+              <h5 className="font-medium text-gray-800 mb-1">Contextual Questions:</h5>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li>When do you typically use this product?</li>
+                <li>Where do you use this most often?</li>
+                <li>Who do you usually interact with when using this?</li>
+                <li>What happens right before or after this?</li>
+              </ul>
+            </div>
+            
+            <div>
+              <h5 className="font-medium text-gray-800 mb-1">Ask for Examples:</h5>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li>Can you give me an example of when this happened?</li>
+                <li>Could you walk me through a time when you used this feature?</li>
+              </ul>
+            </div>
+            
+            <div>
+              <h5 className="font-medium text-gray-800 mb-1">Prompt Users to Elaborate:</h5>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li>That's interesting! Can you explain a little more about how you came to that conclusion?</li>
+                <li>I see, so it sounds like this really impacts your experience. Can you share more about how it affects you day-to-day?</li>
+                <li>You mentioned you like this feature. Can you tell me more about what makes it work well for you?</li>
+                <li>It sounds like this frustrates you. How do you usually cope with that?</li>
+              </ul>
+            </div>
+            
+            <div>
+              <h5 className="font-medium text-gray-800 mb-1">Scenario-based Probing:</h5>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li>How would you feel if this feature were removed?</li>
+                <li>If you could change one thing about this, what would it be and why?</li>
+              </ul>
+            </div>
+          </div>
         </div>
+        
         <div className="bg-blue-50 p-3 rounded-lg">
           <p className="text-sm text-blue-800">
             <strong>Goal:</strong> Practice active listening and asking meaningful follow-up questions that reveal user insights.
