@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpException, HttpStatus, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpException, HttpStatus, Param, Post } from '@nestjs/common';
 import { DbService } from './db.service';
 class CreateGuestDto {
   name: string;
@@ -122,6 +122,120 @@ export class DbController {
       return { sessionId, ...status };
     } catch (e) {
       throw new HttpException(e.message ?? 'Failed to fetch interview completion status', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Post('interview-session-data')
+  async saveInterviewSessionData(@Body() body: {
+    sessionId: string;
+    personaTag?: string;
+    scenarioData?: any;
+  }) {
+    try {
+      const { sessionId, personaTag, scenarioData } = body;
+      
+      if (!sessionId) {
+        throw new HttpException('sessionId is required', HttpStatus.BAD_REQUEST);
+      }
+
+      await this.db.saveInterviewSessionData(sessionId, personaTag, scenarioData);
+      return { success: true, message: 'Interview session data saved successfully' };
+    } catch (e) {
+      throw new HttpException(e.message ?? 'Failed to save interview session data', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Get('interview-summary/:sessionId/:userId')
+  async getInterviewSummary(
+    @Param('sessionId') sessionId: string,
+    @Param('userId') userId: string
+  ) {
+    try {
+      const summary = await this.db.getInterviewSummary(sessionId, userId);
+      return { sessionId, userId, ...summary };
+    } catch (e) {
+      throw new HttpException(e.message ?? 'Failed to fetch interview summary', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  // ============================================================================
+  // INTERVIEW SUMMARY STORAGE ENDPOINTS
+  // ============================================================================
+
+  @Post('interview-summaries')
+  async saveInterviewSummary(@Body() body: {
+    sessionId: string;
+    userId: string;
+    userName: string;
+    summaryText: string;
+    summaryFormat?: 'text' | 'markdown' | 'html';
+    sessionName?: string;
+    personaTag?: string;
+    questionCount?: number;
+  }) {
+    try {
+      const { 
+        sessionId, userId, userName, summaryText, summaryFormat, 
+        sessionName, personaTag, questionCount 
+      } = body;
+      
+      if (!sessionId || !userId || !userName || !summaryText) {
+        throw new HttpException('sessionId, userId, userName, and summaryText are required', HttpStatus.BAD_REQUEST);
+      }
+
+      const summary = await this.db.saveInterviewSummary(
+        sessionId, userId, userName, summaryText, summaryFormat,
+        sessionName, personaTag, questionCount
+      );
+      return { success: true, summary };
+    } catch (e) {
+      throw new HttpException(e.message ?? 'Failed to save interview summary', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Get('interview-summaries/session/:sessionId')
+  async getSessionInterviewSummaries(@Param('sessionId') sessionId: string) {
+    try {
+      const summaries = await this.db.getSessionInterviewSummaries(sessionId);
+      return { sessionId, summaries };
+    } catch (e) {
+      throw new HttpException(e.message ?? 'Failed to fetch session interview summaries', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Get('interview-summaries/user/:userId')
+  async getUserInterviewSummaries(@Param('userId') userId: string) {
+    try {
+      const summaries = await this.db.getUserInterviewSummaries(userId);
+      return { userId, summaries };
+    } catch (e) {
+      throw new HttpException(e.message ?? 'Failed to fetch user interview summaries', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Get('interview-summaries/:sessionId/:userId')
+  async getStoredInterviewSummary(
+    @Param('sessionId') sessionId: string,
+    @Param('userId') userId: string
+  ) {
+    try {
+      const summary = await this.db.getStoredInterviewSummary(sessionId, userId);
+      if (!summary) {
+        return { sessionId, userId, summary: null, message: 'No stored summary found' };
+      }
+      return { sessionId, userId, summary };
+    } catch (e) {
+      throw new HttpException(e.message ?? 'Failed to fetch stored interview summary', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Delete('interview-summaries/:summaryId')
+  async deleteInterviewSummary(@Param('summaryId') summaryId: string) {
+    try {
+      await this.db.deleteInterviewSummary(summaryId);
+      return { success: true, message: 'Interview summary deleted successfully' };
+    } catch (e) {
+      throw new HttpException(e.message ?? 'Failed to delete interview summary', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 }

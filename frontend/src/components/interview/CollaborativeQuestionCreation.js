@@ -256,7 +256,7 @@ const CollaborativeQuestionCreation = ({ selectedScenario, onBack, onContinue })
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
               <Lightbulb className="h-6 w-6 text-blue-600 mr-2" />
-              Create Your Interview Question
+              Create Your Pre-Planned Interview Question
             </h2>
             
             <div className="space-y-6">

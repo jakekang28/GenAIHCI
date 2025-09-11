@@ -96,6 +96,20 @@ export interface PovHmwSessionDataRow {
   updated_at: string;
 }
 
+export interface InterviewSummaryRow {
+  id: UUID;
+  session_id: UUID;
+  user_id: UUID;
+  user_name: string;
+  summary_text: string;
+  summary_format: 'text' | 'markdown' | 'html';
+  session_name?: string;
+  persona_tag?: string;
+  question_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // ============================================================================
 // LEGACY INTERFACES (for backward compatibility)
 // ============================================================================
@@ -698,6 +712,204 @@ export class DbService {
     }
 
     return (data || []) as AiEvaluationRow[];
+  }
+
+  // ============================================================================
+  // INTERVIEW SUMMARY STORAGE METHODS
+  // ============================================================================
+
+  /** Save interview summary text */
+  async saveInterviewSummary(
+    sessionId: string,
+    userId: string,
+    userName: string,
+    summaryText: string,
+    summaryFormat: 'text' | 'markdown' | 'html' = 'text',
+    sessionName?: string,
+    personaTag?: string,
+    questionCount?: number
+  ): Promise<InterviewSummaryRow> {
+    this.logger.log(`Saving interview summary for session: ${sessionId}, user: ${userName} (${userId})`);
+    
+    const { data, error } = await this.client
+      .from('interview_summaries')
+      .upsert({
+        session_id: sessionId,
+        user_id: userId,
+        user_name: userName,
+        summary_text: summaryText,
+        summary_format: summaryFormat,
+        session_name: sessionName,
+        persona_tag: personaTag,
+        question_count: questionCount
+      }, {
+        onConflict: 'session_id,user_id'
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      this.logger.error('saveInterviewSummary error', error);
+      throw error;
+    }
+    
+    this.logger.log(`Successfully saved interview summary with ID: ${data.id}`);
+    return data as InterviewSummaryRow;
+  }
+
+  /** Get interview summary by session and user */
+  async getStoredInterviewSummary(sessionId: string, userId: string): Promise<InterviewSummaryRow | null> {
+    this.logger.log(`Fetching stored interview summary for session: ${sessionId}, user: ${userId}`);
+    
+    const { data, error } = await this.client
+      .from('interview_summaries')
+      .select('*')
+      .eq('session_id', sessionId)
+      .eq('user_id', userId)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No data found
+        return null;
+      }
+      this.logger.error('getStoredInterviewSummary error', error);
+      throw error;
+    }
+    
+    return data as InterviewSummaryRow;
+  }
+
+  /** Get all interview summaries for a user */
+  async getUserInterviewSummaries(userId: string): Promise<InterviewSummaryRow[]> {
+    this.logger.log(`Fetching all interview summaries for user: ${userId}`);
+    
+    const { data, error } = await this.client
+      .from('interview_summaries')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      this.logger.error('getUserInterviewSummaries error', error);
+      throw error;
+    }
+    
+    return (data || []) as InterviewSummaryRow[];
+  }
+
+  /** Get all interview summaries for a session */
+  async getSessionInterviewSummaries(sessionId: string): Promise<InterviewSummaryRow[]> {
+    this.logger.log(`Fetching all interview summaries for session: ${sessionId}`);
+    
+    const { data, error } = await this.client
+      .from('interview_summaries')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      this.logger.error('getSessionInterviewSummaries error', error);
+      throw error;
+    }
+    
+    return (data || []) as InterviewSummaryRow[];
+  }
+
+  /** Delete interview summary */
+  async deleteInterviewSummary(summaryId: string): Promise<void> {
+    this.logger.log(`Deleting interview summary: ${summaryId}`);
+    
+    const { error } = await this.client
+      .from('interview_summaries')
+      .delete()
+      .eq('id', summaryId);
+    
+    if (error) {
+      this.logger.error('deleteInterviewSummary error', error);
+      throw error;
+    }
+    
+    this.logger.log(`Successfully deleted interview summary: ${summaryId}`);
+  }
+
+  async getInterviewSummary(sessionId: string, userId: string): Promise<{
+    chosenPersona: string | null;
+    writtenQuestion: string | null;
+    selectedQuestion: string | null;
+    aiQuestionFeedback: any | null;
+    interviewTranscript: any | null;
+    aiInterviewFeedback: any | null;
+    sessionDetails: any | null;
+  }> {
+    this.logger.log(`Fetching interview summary for session: ${sessionId}, user: ${userId}`);
+
+    try {
+      // Get session details
+      const session = await this.getSession(sessionId);
+
+      // Get user's contributions (questions they wrote)
+      const userQuestions = await this.getContributions(sessionId, 'interview_question');
+      const userQuestion = userQuestions.find(q => q.user_id === userId);
+
+      // Get user's interview transcript
+      const userTranscriptQuery = await this.client
+        .from('interview_transcripts')
+        .select('*')
+        .eq('session_id', sessionId)
+        .eq('user_id', userId)
+        .single();
+
+      const userTranscript = userTranscriptQuery.data;
+
+      // Get AI evaluations for this user and session
+      const preEvaluations = await this.getAiEvaluations(sessionId, 'pre_question_eval');
+      const postEvaluations = await this.getAiEvaluations(sessionId, 'post_interview_eval');
+
+      // Find user-specific evaluations if they exist
+      const userPreEvaluation = preEvaluations.find(evaluation => evaluation.user_id === userId) || preEvaluations[0];
+      const userPostEvaluation = postEvaluations.find(evaluation => evaluation.user_id === userId) || postEvaluations[0];
+
+      // Get session interview data for persona
+      const sessionDataQuery = await this.client
+        .from('interview_session_data')
+        .select('*')
+        .eq('session_id', sessionId)
+        .single();
+
+      const sessionData = sessionDataQuery.data;
+
+      return {
+        chosenPersona: sessionData?.persona_tag || null,
+        writtenQuestion: userQuestion?.content?.question || null,
+        selectedQuestion: session?.selected_question_content || null,
+        aiQuestionFeedback: userPreEvaluation ? {
+          input_data: userPreEvaluation.input_data,
+          ai_response: userPreEvaluation.ai_response,
+          processed_scores: userPreEvaluation.processed_scores,
+          feedback_summary: userPreEvaluation.feedback_summary
+        } : null,
+        interviewTranscript: userTranscript ? {
+          messages: userTranscript.messages,
+          scenario_data: userTranscript.scenario_data,
+          created_at: userTranscript.created_at
+        } : null,
+        aiInterviewFeedback: userPostEvaluation ? {
+          input_data: userPostEvaluation.input_data,
+          ai_response: userPostEvaluation.ai_response,
+          processed_scores: userPostEvaluation.processed_scores,
+          feedback_summary: userPostEvaluation.feedback_summary
+        } : null,
+        sessionDetails: {
+          scenario_data: sessionData?.scenario_data || session?.selected_scenario,
+          session_name: session?.name,
+          created_at: session?.created_at
+        }
+      };
+    } catch (error) {
+      this.logger.error('getInterviewSummary error', error);
+      throw error;
+    }
   }
 
   // ============================================================================

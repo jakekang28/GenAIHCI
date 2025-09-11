@@ -16,6 +16,7 @@ import InterviewSession from './interview/InterviewSession';
 import TranscriptReview from './interview/TranscriptReview';
 import PeerTranscriptEvaluation from './interview/PeerTranscriptEvaluation';
 import PostInterviewEvaluation from './interview/PostInterviewEvaluation';
+import InterviewSummary from './interview/InterviewSummary';
 
 // Collaborative POV/HMW Components
 import NeedsInsights from './povhmw/NeedsInsights';
@@ -81,7 +82,7 @@ const InterviewHMWSystem = () => {
   const personaSelection = async (tag) => {
     // Skip persona retrieval for collaborative sessions - personas are predefined
     console.log('👤 [InterviewHMWSystem] Persona selection:', tag, '(skipping API call for collaborative mode)');
-    // await apiService.personaRetrieval(tag);  // Disabled to avoid unnecessary OpenAI calls
+
   };
 
   const generateAIResponse = async (question) => {
@@ -173,8 +174,9 @@ const InterviewHMWSystem = () => {
   useEffect(() => {
     if (currentStep === 'ai-question-feedback' && selectedGroupQuestion && selectedScenario) {
       console.log('🤖 [InterviewHMWSystem] Triggering pre-evaluation for:', selectedGroupQuestion);
+      console.log('🤖 [InterviewHMWSystem] Using sessionId:', sessionId);
       setLoading(true);
-      apiService.preEvaluation(selectedGroupQuestion, selectedScenario.tag)
+      apiService.preEvaluation(selectedGroupQuestion, selectedScenario.tag, sessionId)
         .then(data => {
           setAiFeedback(data);
           setLoading(false);
@@ -185,7 +187,7 @@ const InterviewHMWSystem = () => {
           setLoading(false);
         });
     }
-  }, [currentStep, selectedGroupQuestion, selectedScenario]);
+  }, [currentStep, selectedGroupQuestion, selectedScenario, sessionId]);
 
   // Post-evaluation trigger
   useEffect(() => {
@@ -305,11 +307,23 @@ const InterviewHMWSystem = () => {
     navigateToStep('hmw-needs-insights');
   };
 
-  const handleScenarioSelection = (scenario) => {
+  const handleScenarioSelection = async (scenario) => {
     console.log('🎯 [InterviewHMWSystem] handleScenarioSelection called with:', scenario);
     console.log('🎯 [InterviewHMWSystem] Current sessionType:', sessionType);
     
     setSelectedScenario(scenario);
+    
+    // Save interview session data immediately when scenario is selected
+    if (sessionId && scenario) {
+      try {
+        console.log('💾 [InterviewHMWSystem] Saving interview session data for scenario:', scenario.tag);
+        await apiService.saveInterviewSessionData(sessionId, scenario.tag, scenario);
+      } catch (error) {
+        console.error('❌ [InterviewHMWSystem] Failed to save interview session data:', error);
+        // Don't block the flow, just log the error
+      }
+    }
+    
     if (sessionType === 'interview') {
       console.log('✅ [InterviewHMWSystem] Navigating to collaborative-question-creation');
       navigateToStep('collaborative-question-creation');
@@ -454,6 +468,12 @@ const InterviewHMWSystem = () => {
           aiScoreFeedback={aiScoreFeedback}
           loading={loading}
           onBack={() => navigateToStep('peer-transcript-evaluation')}
+          onComplete={() => navigateToStep('interview-summary')}
+        />
+      ),
+      'interview-summary': () => (
+        <InterviewSummary 
+          onBack={() => navigateToStep('post-interview-evaluation')}
           onComplete={handleCompleteSession}
         />
       ),

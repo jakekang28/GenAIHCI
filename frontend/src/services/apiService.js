@@ -198,7 +198,7 @@ class ApiService {
       throw err;  
     }
   }
-  async preEvaluation(initQ, persona) {
+  async preEvaluation(initQ, persona, sessionId = null) {
     try {
       // Use sessionStorage-first approach (consistent with useLocalGuest)
       let guestData = null;
@@ -234,17 +234,24 @@ class ApiService {
         throw new Error('No guestUserId found. Please create a room first.');
       }
       
+      const requestBody = { 
+        guestUserId: guestData.guestUserId,  
+        guestName: guestData.guestName || 'Guest',      
+        question: initQ,           
+        persona: persona
+      };
+
+      // Include sessionId if provided
+      if (sessionId) {
+        requestBody.sessionId = sessionId;
+      }
+      
       const response = await fetch(`${API_BASE_URL}/llm/preeval-interview?tag=${persona}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          guestUserId: guestData.guestUserId,  
-          guestName: guestData.guestName || 'Guest',      
-          question: initQ,           
-          persona: persona           
-        }),
+        body: JSON.stringify(requestBody),
       });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -407,6 +414,119 @@ class ApiService {
     });
     if (!response.ok) {
       throw new Error('Failed to check interview completion status with participants');
+    }
+    const data = await response.json();
+    return data;
+  }
+
+  async saveInterviewSessionData(sessionId, personaTag, scenarioData) {
+    const response = await fetch(`${API_BASE_URL}/db/interview-session-data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId, personaTag, scenarioData }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to save interview session data');
+    }
+    const data = await response.json();
+    return data;
+  }
+
+  async getInterviewSummary(sessionId, userId) {
+    const response = await fetch(`${API_BASE_URL}/db/interview-summary/${sessionId}/${userId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) {
+      throw new Error('Failed to fetch interview summary');
+    }
+    const data = await response.json();
+    return data;
+  }
+
+  // ============================================================================
+  // INTERVIEW SUMMARY STORAGE METHODS
+  // ============================================================================
+
+  async saveInterviewSummaryText(sessionId, userId, userName, summaryText, options = {}) {
+    const response = await fetch(`${API_BASE_URL}/db/interview-summaries`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sessionId,
+        userId,
+        userName,
+        summaryText,
+        summaryFormat: options.summaryFormat || 'text',
+        sessionName: options.sessionName,
+        personaTag: options.personaTag,
+        questionCount: options.questionCount
+      }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to save interview summary text');
+    }
+    const data = await response.json();
+    return data;
+  }
+
+  async getStoredInterviewSummary(sessionId, userId) {
+    const response = await fetch(`${API_BASE_URL}/db/interview-summaries/${sessionId}/${userId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) {
+      throw new Error('Failed to fetch stored interview summary');
+    }
+    const data = await response.json();
+    return data;
+  }
+
+  async getUserInterviewSummaries(userId) {
+    const response = await fetch(`${API_BASE_URL}/db/interview-summaries/user/${userId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) {
+      throw new Error('Failed to fetch user interview summaries');
+    }
+    const data = await response.json();
+    return data;
+  }
+
+  async getSessionInterviewSummaries(sessionId) {
+    const response = await fetch(`${API_BASE_URL}/db/interview-summaries/session/${sessionId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) {
+      throw new Error('Failed to fetch session interview summaries');
+    }
+    const data = await response.json();
+    return data;
+  }
+
+  async deleteInterviewSummary(summaryId) {
+    const response = await fetch(`${API_BASE_URL}/db/interview-summaries/${summaryId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) {
+      throw new Error('Failed to delete interview summary');
     }
     const data = await response.json();
     return data;
