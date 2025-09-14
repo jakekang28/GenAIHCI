@@ -26,35 +26,30 @@ export class PovHmwService {
         return null;
       }
 
-      // Parse scores from content
+      // Parse scores from content using more robust regex patterns
       const scores: any = {};
-      const lines = content.split('\n');
       
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        
-        // Look for patterns like "Actionable: 4" or "Actionable - 4" or "Actionable 4"
-        if (trimmedLine.includes(':')) {
-          const [category, scoreText] = trimmedLine.split(':').map(s => s.trim());
-          const scoreMatch = scoreText.match(/(\d+)/);
-          if (scoreMatch) {
-            scores[category] = parseInt(scoreMatch[1]);
-          }
-        } else if (trimmedLine.includes('-')) {
-          const [category, scoreText] = trimmedLine.split('-').map(s => s.trim());
-          const scoreMatch = scoreText.match(/(\d+)/);
-          if (scoreMatch) {
-            scores[category] = parseInt(scoreMatch[1]);
-          }
-        } else {
-          // Look for patterns like "Actionable 4" (no separator)
-          const scoreMatch = trimmedLine.match(/([A-Za-z\s]+)\s*(\d+)/);
-          if (scoreMatch) {
-            const category = scoreMatch[1].trim();
-            const score = parseInt(scoreMatch[2]);
-            if (category && !isNaN(score)) {
-              scores[category] = score;
-            }
+      // More flexible patterns to catch various formats
+      const patterns = [
+        // Pattern 1: "**Category: 4**" or "**Category:4**"
+        /\*\*([^*]+):\s*(\d+)\*\*/g,
+        // Pattern 2: "Category: 4" or "Category:4"
+        /([A-Za-z\s]+):\s*(\d+)/g,
+        // Pattern 3: "Category - 4" or "Category-4"
+        /([A-Za-z\s]+)\s*-\s*(\d+)/g,
+        // Pattern 4: "Category 4" (space separated)
+        /([A-Za-z\s]+)\s+(\d+)/g
+      ];
+
+      for (const pattern of patterns) {
+        let match;
+        while ((match = pattern.exec(content)) !== null) {
+          const category = match[1].trim().replace(/\*\*/g, ''); // Remove any remaining **
+          const score = parseInt(match[2]);
+          
+          // Only accept valid scores (1-5) and meaningful categories
+          if (!isNaN(score) && score >= 1 && score <= 5 && category.length > 2) {
+            scores[category] = score;
           }
         }
       }
@@ -278,11 +273,46 @@ export class PovHmwService {
         id: contrib.id,
         question: contrib.content.question,
         student_name: contrib.content.student_name,
+        user_id: contrib.user_id,
         order_index: contrib.order_index,
         created_at: contrib.created_at
       }));
     } catch (error) {
       this.logger.error('getHmwQuestions error', error);
+      throw error;
+    }
+  }
+
+  /** Get HMW questions for a specific user in a session */
+  async getUserHmwQuestions(sessionId: string, userId: string): Promise<any[]> {
+    try {
+      const allQuestions = await this.getHmwQuestions(sessionId);
+      return allQuestions.filter(q => q.user_id === userId);
+    } catch (error) {
+      this.logger.error('getUserHmwQuestions error', error);
+      throw error;
+    }
+  }
+
+  /** Get selected HMW questions for a session */
+  async getSelectedHmwQuestions(sessionId: string): Promise<any[]> {
+    try {
+      const session = await this.db.getSession(sessionId);
+      const selectedContents = session.selected_hmw_contents || [];
+      
+      // Get all HMW questions and match with selected contents
+      const allQuestions = await this.getHmwQuestions(sessionId);
+      return selectedContents.map((content, index) => ({
+        id: `selected-${index}`,
+        question: content,
+        student_name: 'Team Selection',
+        user_id: null,
+        order_index: index + 1,
+        created_at: new Date().toISOString(),
+        isSelected: true
+      }));
+    } catch (error) {
+      this.logger.error('getSelectedHmwQuestions error', error);
       throw error;
     }
   }
@@ -351,6 +381,74 @@ export class PovHmwService {
     }
   }
 
+  /** Evaluate all POV statements for a session */
+  async evaluateAllPovs(sessionId: string, needs: string[], insights: string[], createdBy?: string): Promise<any[]> {
+    try {
+      // Get all POV statements for the session
+      const povStatements = await this.getPovStatements(sessionId);
+      
+      if (povStatements.length === 0) {
+        this.logger.warn(`No POV statements found for session: ${sessionId}`);
+        return [];
+      }
+
+      const needsText = needs.map((need, i) => `${i + 1}. ${need}`).join('\n');
+      const insightsText = insights.map((insight, i) => `Insight ${i + 1}: ${insight}`).join('\n');
+      
+      const results: any[] = [];
+      
+      // Evaluate each POV statement
+      for (const povStatement of povStatements) {
+        this.logger.log(`Evaluating POV statement ${povStatement.id} by ${povStatement.student_name}`);
+        
+        const dynamicData = {
+          needs: needsText,
+          insights: insightsText,
+          userPOV: povStatement.statement
+        };
+
+        const result = await this.llmService.runDynamicPrompt('pov.txt', dynamicData);
+        
+        // Parse AI response to extract scores
+        const processedScores = this.parseAiEvaluationScores(result);
+        
+        // Save AI evaluation to database
+        await this.db.saveAiEvaluation(
+          sessionId,
+          'pov_feedback',
+          { 
+            statement: povStatement.statement, 
+            needs, 
+            insights,
+            povStatementId: povStatement.id,
+            studentName: povStatement.student_name
+          },
+          result,
+          { needs, insights, povStatementId: povStatement.id, studentName: povStatement.student_name }, // input metadata
+          processedScores, // parsed scores
+          `AI POV Evaluation for ${povStatement.student_name}`, // feedback summary
+          createdBy
+        );
+        
+        results.push({
+          povStatementId: povStatement.id,
+          statement: povStatement.statement,
+          studentName: povStatement.student_name,
+          evaluation: result,
+          processedScores
+        });
+        
+        this.logger.log(`POV evaluation completed and saved for statement ${povStatement.id}`);
+      }
+      
+      this.logger.log(`Completed evaluation of ${results.length} POV statements for session: ${sessionId}`);
+      return results;
+    } catch (error) {
+      this.logger.error('evaluateAllPovs error', error);
+      throw error;
+    }
+  }
+
   /** Evaluate HMW questions with AI */
   async evaluateHmw(questions: string[], needs: string[], insights: string[], selectedPov: string, sessionId?: string, createdBy?: string): Promise<any[]> {
     try {
@@ -397,6 +495,120 @@ export class PovHmwService {
       return results;
     } catch (error) {
       this.logger.error('evaluateHmw error', error);
+      throw error;
+    }
+  }
+
+  /** Evaluate user's own HMWs and selected HMWs */
+  async evaluateUserAndSelectedHmws(sessionId: string, userId: string, needs: string[], insights: string[], selectedPov: string, createdBy?: string): Promise<{
+    userHmwResults: any[];
+    selectedHmwResults: any[];
+  }> {
+    try {
+      // Get user's own HMW questions
+      const userHmwQuestions = await this.getUserHmwQuestions(sessionId, userId);
+      const selectedHmwQuestions = await this.getSelectedHmwQuestions(sessionId);
+
+      const needsText = needs.map((need, i) => `${i + 1}. ${need}`).join('\n');
+      const insightsText = insights.map((insight, i) => `Insight ${i + 1}: ${insight}`).join('\n');
+      
+      const userHmwResults: any[] = [];
+      const selectedHmwResults: any[] = [];
+      
+      // Evaluate user's own HMW questions
+      for (let i = 0; i < userHmwQuestions.length; i++) {
+        const hmwQuestion = userHmwQuestions[i];
+        
+        const dynamicData = {
+          needs: needsText,
+          insights: insightsText,
+          userPOV: selectedPov,
+          hmwQuestions: `${i + 1}. ${hmwQuestion.question}`
+        };
+
+        const result = await this.llmService.runDynamicPrompt('hmw.txt', dynamicData);
+        const processedScores = this.parseAiEvaluationScores(result);
+        
+        userHmwResults.push({
+          hmwQuestionId: hmwQuestion.id,
+          question: hmwQuestion.question,
+          orderIndex: hmwQuestion.order_index,
+          evaluation: result,
+          processedScores,
+          isUserOwn: true
+        });
+        
+        // Save AI evaluation
+        if (sessionId) {
+          await this.db.saveAiEvaluation(
+            sessionId,
+            'hmw_feedback',
+            { 
+              question: hmwQuestion.question, 
+              needs, 
+              insights, 
+              selectedPov,
+              hmwQuestionId: hmwQuestion.id,
+              evaluationType: 'user_own'
+            },
+            result,
+            { needs, insights, selectedPov, hmwQuestionId: hmwQuestion.id, evaluationType: 'user_own' },
+            processedScores,
+            `AI HMW Evaluation for User's Question ${i + 1}`,
+            createdBy
+          );
+        }
+      }
+      
+      // Evaluate selected HMW questions
+      for (let i = 0; i < selectedHmwQuestions.length; i++) {
+        const hmwQuestion = selectedHmwQuestions[i];
+        
+        const dynamicData = {
+          needs: needsText,
+          insights: insightsText,
+          userPOV: selectedPov,
+          hmwQuestions: `${i + 1}. ${hmwQuestion.question}`
+        };
+
+        const result = await this.llmService.runDynamicPrompt('hmw.txt', dynamicData);
+        const processedScores = this.parseAiEvaluationScores(result);
+        
+        selectedHmwResults.push({
+          hmwQuestionId: hmwQuestion.id,
+          question: hmwQuestion.question,
+          orderIndex: hmwQuestion.order_index,
+          evaluation: result,
+          processedScores,
+          isSelected: true
+        });
+        
+        // Save AI evaluation
+        if (sessionId) {
+          await this.db.saveAiEvaluation(
+            sessionId,
+            'hmw_feedback',
+            { 
+              question: hmwQuestion.question, 
+              needs, 
+              insights, 
+              selectedPov,
+              hmwQuestionId: hmwQuestion.id,
+              evaluationType: 'selected'
+            },
+            result,
+            { needs, insights, selectedPov, hmwQuestionId: hmwQuestion.id, evaluationType: 'selected' },
+            processedScores,
+            `AI HMW Evaluation for Selected Question ${i + 1}`,
+            createdBy
+          );
+        }
+      }
+      
+      this.logger.log(`Completed evaluation of ${userHmwResults.length} user HMWs and ${selectedHmwResults.length} selected HMWs for session: ${sessionId}`);
+      return { userHmwResults, selectedHmwResults };
+    } catch (error) {
+      this.logger.error('evaluateUserAndSelectedHmws error', error);
       throw error;
     }
   }

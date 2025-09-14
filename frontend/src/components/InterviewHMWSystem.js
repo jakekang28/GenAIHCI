@@ -20,6 +20,7 @@ import InterviewSummary from './interview/InterviewSummary';
 
 // Collaborative POV/HMW Components
 import NeedsInsights from './povhmw/NeedsInsights';
+import CollaborativeNeedsInsights from './povhmw/CollaborativeNeedsInsights';
 import CollaborativePovCreation from './povhmw/CollaborativePovCreation';
 import PovAiFeedback from './povhmw/PovAiFeedback';
 import CollaborativeHMWCreation from './povhmw/CollaborativeHMWCreation';
@@ -72,7 +73,10 @@ const InterviewHMWSystem = () => {
   const [povLoading, setPovLoading] = useState(false);
   const [hmwLoading, setHmwLoading] = useState(false);
   const [povAIResult, setPovAIResult] = useState(null);
+  const [allPovAIResults, setAllPovAIResults] = useState([]); // New: Store all POV evaluations
   const [hmwAIResults, setHmwAIResults] = useState({});
+  const [userHmwAIResults, setUserHmwAIResults] = useState([]); // User's own HMW evaluations
+  const [selectedHmwAIResults, setSelectedHmwAIResults] = useState([]); // Selected HMW evaluations
   const [apiError, setApiError] = useState(null);
 
   // ========================================
@@ -131,6 +135,41 @@ const InterviewHMWSystem = () => {
     }
   };
 
+  // New function to evaluate all POV statements
+  const evaluateAllPovStatements = async () => {
+    setPovLoading(true);
+    setApiError(null);
+    
+    try {
+      // Get current user info from session
+      const currentUser = members?.find(m => m.socketId === socket?.id);
+      const userId = currentUser?.userId;
+      
+      const result = await apiService.evaluateAllPovsWithSession(
+        sessionId,
+        needs.filter(need => need.trim()),
+        insights.filter(insight => insight.trim()),
+        userId
+      );
+      
+      if (result.success) {
+        setAllPovAIResults(result.results);
+        // Also set the selected POV result for backward compatibility
+        const selectedPovResult = result.results.find(r => r.statement === selectedGroupPov);
+        if (selectedPovResult) {
+          setPovAIResult(selectedPovResult.evaluation);
+        }
+      } else {
+        setApiError(result.error || 'Evaluation failed');
+      }
+    } catch (error) {
+      setApiError('Failed to connect to evaluation service');
+      console.error('All POV evaluation error:', error);
+    } finally {
+      setPovLoading(false);
+    }
+  };
+
   const evaluateHMWQuestions = async (questions) => {
     setHmwLoading(true);
     setApiError(null);
@@ -157,6 +196,45 @@ const InterviewHMWSystem = () => {
     } catch (error) {
       setApiError('Failed to connect to evaluation service');
       console.error('HMW evaluation error:', error);
+    } finally {
+      setHmwLoading(false);
+    }
+  };
+
+  // New function to evaluate both user's own HMWs and selected HMWs
+  const evaluateUserAndSelectedHMWs = async () => {
+    setHmwLoading(true);
+    setApiError(null);
+    
+    try {
+      // Get current user info from session
+      const currentUser = members?.find(m => m.socketId === socket?.id);
+      const userId = currentUser?.userId;
+      
+      const result = await apiService.evaluateUserAndSelectedHmwsWithSession(
+        sessionId,
+        userId,
+        needs.filter(need => need.trim()),
+        insights.filter(insight => insight.trim()),
+        selectedGroupPov
+      );
+      
+      if (result.success) {
+        setUserHmwAIResults(result.userHmwResults);
+        setSelectedHmwAIResults(result.selectedHmwResults);
+        
+        // Also set the original hmwAIResults for backward compatibility with selected questions
+        const results = {};
+        result.selectedHmwResults.forEach((evalResult, index) => {
+          results[index] = evalResult.evaluation;
+        });
+        setHmwAIResults(results);
+      } else {
+        setApiError(result.error || 'Evaluation failed');
+      }
+    } catch (error) {
+      setApiError('Failed to connect to evaluation service');
+      console.error('User and selected HMW evaluation error:', error);
     } finally {
       setHmwLoading(false);
     }
@@ -211,23 +289,21 @@ const InterviewHMWSystem = () => {
     }
   }, [currentStep, qaHistory, selectedScenario, sessionId, members, socket]);
 
-  // POV evaluation trigger
+  // POV evaluation trigger - now evaluates all POVs instead of just selected one
   useEffect(() => {
-    if (currentStep === 'pov-ai-feedback' && selectedGroupPov && !povAIResult && !povLoading) {
-      evaluatePovStatement(selectedGroupPov);
+    if (currentStep === 'pov-ai-feedback' && selectedGroupPov && allPovAIResults.length === 0 && !povLoading) {
+      evaluateAllPovStatements();
     }
-  }, [currentStep, selectedGroupPov, povAIResult, povLoading]);
+  }, [currentStep, selectedGroupPov, allPovAIResults, povLoading]);
 
-  // HMW evaluation trigger
+  // HMW evaluation trigger - now evaluates both user's own and selected HMWs
   useEffect(() => {
     if (currentStep === 'final-hmw-ai-feedback') {
-      const questionsToEvaluate = selectedFinalHmwQuestions.filter(q => q.trim());
-      
-      if (questionsToEvaluate.length > 0 && Object.keys(hmwAIResults).length === 0 && !hmwLoading) {
-        evaluateHMWQuestions(questionsToEvaluate);
+      if (userHmwAIResults.length === 0 && selectedHmwAIResults.length === 0 && !hmwLoading) {
+        evaluateUserAndSelectedHMWs();
       }
     }
-  }, [currentStep, selectedFinalHmwQuestions, hmwAIResults, hmwLoading]);
+  }, [currentStep, userHmwAIResults, selectedHmwAIResults, hmwLoading]);
 
   // ========================================
   // NAVIGATION FUNCTIONS
@@ -251,7 +327,7 @@ const InterviewHMWSystem = () => {
       setChatMessages([]);
     }
     
-    if (step === 'hmw-needs-insights') {
+    if (step === 'hmw-needs-insights' || step === 'collaborative-needs-insights') {
       setNeeds(Array(3).fill(''));
       setInsights(Array(3).fill(''));
       setPovStatement('');
@@ -304,7 +380,7 @@ const InterviewHMWSystem = () => {
   const handleStartHMW = () => {
     setSelectedScenario(null);
     setSessionType('hmw');
-    navigateToStep('hmw-needs-insights');
+    navigateToStep('collaborative-needs-insights');
   };
 
   const handleScenarioSelection = async (scenario) => {
@@ -328,8 +404,8 @@ const InterviewHMWSystem = () => {
       console.log('✅ [InterviewHMWSystem] Navigating to collaborative-question-creation');
       navigateToStep('collaborative-question-creation');
     } else {
-      console.log('✅ [InterviewHMWSystem] Navigating to hmw-needs-insights');
-      navigateToStep('hmw-needs-insights');
+      console.log('✅ [InterviewHMWSystem] Navigating to collaborative-needs-insights');
+      navigateToStep('collaborative-needs-insights');
     }
   };
 
@@ -483,11 +559,17 @@ const InterviewHMWSystem = () => {
           onContinue={handleNeedsInsightsSubmit}
         />
       ),
+      'collaborative-needs-insights': () => (
+        <CollaborativeNeedsInsights 
+          onBack={() => navigateToStep('home')}
+          onContinue={handleNeedsInsightsSubmit}
+        />
+      ),
       'collaborative-pov-creation': () => (
         <CollaborativePovCreation 
           needs={needs}
           insights={insights}
-          onBack={() => navigateToStep('hmw-needs-insights')}
+          onBack={() => navigateToStep('collaborative-needs-insights')}
           onContinue={handlePovGroupSelection}
         />
       ),
@@ -497,11 +579,12 @@ const InterviewHMWSystem = () => {
           needs={needs}
           insights={insights}
           povAIResult={povAIResult}
+          allPovAIResults={allPovAIResults}
           povLoading={povLoading}
           apiError={apiError}
           onBack={() => navigateToStep('collaborative-pov-creation')}
           onContinue={() => navigateToStep('collaborative-hmw-creation')}
-          onRetryEvaluation={() => evaluatePovStatement(selectedGroupPov)}
+          onRetryEvaluation={() => evaluateAllPovStatements()}
         />
       ),
       'collaborative-hmw-creation': () => (
@@ -518,11 +601,13 @@ const InterviewHMWSystem = () => {
           selectedFinalHmwQuestions={selectedFinalHmwQuestions}
           selectedGroupPov={selectedGroupPov}
           hmwAIResults={hmwAIResults}
+          userHmwAIResults={userHmwAIResults}
+          selectedHmwAIResults={selectedHmwAIResults}
           hmwLoading={hmwLoading}
           apiError={apiError}
           onBack={() => navigateToStep('collaborative-hmw-creation')}
           onComplete={handleCompleteSession}
-          onRetryEvaluation={() => evaluateHMWQuestions(selectedFinalHmwQuestions.filter(q => q.trim()))}
+          onRetryEvaluation={() => evaluateUserAndSelectedHMWs()}
         />
       )
     };

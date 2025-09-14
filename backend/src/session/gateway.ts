@@ -283,6 +283,11 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
       socket.emit('room:contributions', { roomId, type: 'hmw_question', contributions: hmwContribs });
       socket.emit('room:contributions', { roomId, type: 'interview_question', contributions: iqContribs });
       
+      // Send existing host decisions to joining user
+      const hostDecisions = this.hostDecisions.get(roomId) || [];
+      for (const decision of hostDecisions) {
+        socket.emit('room:host_decision', { decision });
+      }
 
       // Broadcast Member Update to Room
       this.broadcastRoomMembers(roomId);

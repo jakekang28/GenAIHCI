@@ -104,6 +104,22 @@ export class PovHmwController {
     return { success: true, result };
   }
 
+  @Post('evaluate-all-povs')
+  async evaluateAllPovs(@Body() body: { 
+    sessionId: string;
+    needs: string[]; 
+    insights: string[];
+    userId?: string;
+  }) {
+    const results = await this.povHmwService.evaluateAllPovs(
+      body.sessionId,
+      body.needs,
+      body.insights,
+      body.userId
+    );
+    return { success: true, results };
+  }
+
   @Post('evaluate-hmw')
   async evaluateHmw(@Body() body: { 
     questions: string[]; 
@@ -122,6 +138,25 @@ export class PovHmwController {
       body.userId
     );
     return { success: true, results };
+  }
+
+  @Post('evaluate-user-and-selected-hmws')
+  async evaluateUserAndSelectedHmws(@Body() body: { 
+    sessionId: string;
+    userId: string;
+    needs: string[]; 
+    insights: string[]; 
+    selectedPov: string;
+  }) {
+    const results = await this.povHmwService.evaluateUserAndSelectedHmws(
+      body.sessionId,
+      body.userId,
+      body.needs,
+      body.insights,
+      body.selectedPov,
+      body.userId
+    );
+    return { success: true, ...results };
   }
 
   // ============================================================================

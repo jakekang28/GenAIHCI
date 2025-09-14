@@ -75,7 +75,11 @@ export class LangchainService implements OnModuleInit {
     this.evaluatorLlm = new ChatOpenAI({ 
       openAIApiKey: process.env.OPENAI_API_KEY, 
       modelName: 'gpt-4o', 
-      temperature: 0
+      temperature: 0,
+      maxTokens: 2000, // Set explicit token limit for consistency
+      topP: 1, // Set to 1 for maximum determinism
+      frequencyPenalty: 0, // Disable frequency penalty
+      presencePenalty: 0 // Disable presence penalty
     });
     
     // Start cleanup interval
@@ -590,7 +594,17 @@ export class LangchainService implements OnModuleInit {
   async runDynamicPrompt(filename: string, dynamicData: DynamicPromptData) {
     const promptTemplate = this.loadPrompt(filename);
     const finalPrompt = this.replacePlaceholders(promptTemplate, dynamicData);
-    return await this.evaluatorLlm.invoke(finalPrompt);
+    
+    // Log the prompt for debugging consistency issues
+    console.log(`[LLM Debug] Running dynamic prompt: ${filename}`);
+    console.log(`[LLM Debug] Prompt length: ${finalPrompt.length} characters`);
+    
+    const result = await this.evaluatorLlm.invoke(finalPrompt);
+    
+    // Log the result for debugging
+    console.log(`[LLM Debug] Response length: ${result.content?.length || 0} characters`);
+    
+    return result;
   }
   private replacePlaceholders(template: string, data: DynamicPromptData): string {
     let result = template

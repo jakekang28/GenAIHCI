@@ -135,6 +135,47 @@ class ApiService {
   }
 
   /**
+   * Evaluate all POV statements for a session
+   * @param {string} sessionId - Session ID to get POV statements from
+   * @param {string[]} needs - User needs array
+   * @param {string[]} insights - User insights array
+   * @param {string} userId - User ID for database storage
+   * @returns {Promise<Object>} - Success status and AI evaluation results for all POVs
+   */
+  async evaluateAllPovsWithSession(sessionId, needs, insights, userId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/pov-hmw/evaluate-all-povs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          sessionId,
+          needs,
+          insights,
+          userId
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return {
+        success: true,
+        results: data.results,
+      };
+    } catch (error) {
+      console.error('Error evaluating all POVs with session context:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
    * Evaluate HMW questions with session context for database storage
    * @param {string[]} questions - HMW questions array
    * @param {string[]} needs - User needs array
@@ -172,6 +213,50 @@ class ApiService {
       };
     } catch (error) {
       console.error('Error evaluating HMW with session context:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Evaluate both user's own HMWs and selected HMWs for a session
+   * @param {string} sessionId - Session ID to get HMW questions from
+   * @param {string} userId - User ID to get user's own HMWs
+   * @param {string[]} needs - User needs array
+   * @param {string[]} insights - User insights array
+   * @param {string} selectedPov - Selected POV statement
+   * @returns {Promise<Object>} - Success status and AI evaluation results for both sets
+   */
+  async evaluateUserAndSelectedHmwsWithSession(sessionId, userId, needs, insights, selectedPov) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/pov-hmw/evaluate-user-and-selected-hmws`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          sessionId,
+          userId,
+          needs,
+          insights,
+          selectedPov
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return {
+        success: true,
+        userHmwResults: data.userHmwResults,
+        selectedHmwResults: data.selectedHmwResults,
+      };
+    } catch (error) {
+      console.error('Error evaluating user and selected HMWs with session context:', error);
       return {
         success: false,
         error: error.message,
