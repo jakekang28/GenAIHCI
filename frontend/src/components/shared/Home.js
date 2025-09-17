@@ -1,77 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { MessageCircle, Lightbulb, ArrowRight } from 'lucide-react';
-import { useBackTrap } from '../../hooks/useBackTrap.ts';
-import { useSession } from '../../providers/SessionProvider';
+import { useSession } from '../../providers/SessionProvider'; 
 
 const Home = ({ onStartInterview, onStartHMW }) => {
-  useBackTrap(true);
+  const { socket } = useSession();                     
+  const autoEnteredRef = useRef(false);                
 
-  const { sessionId, socket, mySocketId, members } = useSession();
-  const [isResetting, setIsResetting] = useState(false);
+  
+  useEffect(() => {
+    if (!socket) return;
 
-  const me = members?.find((m) => m.socketId === mySocketId);
-  const isHost = !!me?.isHost;
+    const onFlow = (flow) => {
+      // flow: { module: 'interview' | 'hmw', step: string, data?: {...} }
+      if (autoEnteredRef.current) return;        
+      if (!flow || !flow.module) return;
 
-  const waitResetAck = (type, timeout = 200) =>
-    new Promise((resolve) => {
-      if (!socket) return resolve();
-      let done = false;
-      const timer = setTimeout(() => {
-        if (!done) {
-          done = true;
-          socket.off('room:type_reset', onAck);
-          resolve();
-        }
-      }, timeout);
-
-      const onAck = (payload) => {
-        if (done) return;
-        if (payload?.roomId === sessionId && payload?.type === type) {
-          clearTimeout(timer);
-          done = true;
-          socket.off('room:type_reset', onAck);
-          resolve();
-        }
-      };
-      socket.on('room:type_reset', onAck);
-    });
-
-  const emitReset = async (type) => {
-    if (!socket || !sessionId) return;
-    socket.emit('room:reset_type', { roomId: sessionId, type });
-    await waitResetAck(type); 
-  };
-
-  const handleStartInterview = async () => {
-    if (isResetting) return;
-    setIsResetting(true);
-    try {
-
-      if (isHost && socket) {
-
-        await emitReset('scenario_selection');
-        await emitReset('interview_question');
+      if (flow.module === 'interview') {
+        autoEnteredRef.current = true;
+        onStartInterview?.();                    
+      } else if (flow.module === 'hmw') {
+        autoEnteredRef.current = true;
+        onStartHMW?.();
       }
-    } finally {
-      setIsResetting(false);
-      onStartInterview && onStartInterview();
-    }
-  };
+    };
 
-  const handleStartHMW = async () => {
-    if (isResetting) return;
-    setIsResetting(true);
-    try {
-      if (isHost && socket) {
-
-        await emitReset('pov_statement');
-        await emitReset('hmw_question');
-      }
-    } finally {
-      setIsResetting(false);
-      onStartHMW && onStartHMW();
-    }
-  };
+    socket.on('room:flow', onFlow);
+    return () => socket.off('room:flow', onFlow);
+  }, [socket, onStartInterview, onStartHMW]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6 flex items-center justify-center">
@@ -92,20 +47,17 @@ const Home = ({ onStartInterview, onStartHMW }) => {
               </div>
               <h2 className="text-2xl font-bold text-gray-800">Interview System</h2>
             </div>
-
+            
             <p className="text-gray-600 mb-6 leading-relaxed">
-              Practice conducting user interviews with AI personas. Create questions, get group feedback,
+              Practice conducting user interviews with AI personas. Create questions, get group feedback, 
               receive AI guidance, and conduct simulated interviews with follow-up questions.
             </p>
 
-            <button
-              onClick={handleStartInterview}
-              disabled={isResetting}
-              className={`w-full py-3 px-6 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center hover:transform hover:scale-105 smooth-hover ${
-                isResetting ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-teal-600 text-white hover:bg-teal-700'
-              }`}
+            <button 
+              onClick={onStartInterview}
+              className="w-full bg-teal-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-teal-700 transition-all duration-200 flex items-center justify-center hover:transform hover:scale-105 smooth-hover"
             >
-              {isResetting ? 'Preparing…' : 'Start Interview Training'}
+              Start Interview Training
               <ArrowRight className="w-5 h-5 ml-2" />
             </button>
           </div>
@@ -118,20 +70,17 @@ const Home = ({ onStartInterview, onStartHMW }) => {
               </div>
               <h2 className="text-2xl font-bold text-gray-800">POV & HMW System</h2>
             </div>
-
+            
             <p className="text-gray-600 mb-6 leading-relaxed">
-              Learn to create Point of View statements and generate How Might We questions.
+              Learn to create Point of View statements and generate How Might We questions. 
               Practice synthesizing research into actionable design challenges with AI feedback.
             </p>
 
-            <button
-              onClick={handleStartHMW}
-              disabled={isResetting}
-              className={`w-full py-3 px-6 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center hover:transform hover:scale-105 smooth-hover ${
-                isResetting ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'
-              }`}
+            <button 
+              onClick={onStartHMW}
+              className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-purple-700 transition-all duration-200 flex items-center justify-center hover:transform hover:scale-105 smooth-hover"
             >
-              {isResetting ? 'Preparing…' : 'Start POV & HMW Training'}
+              Start POV & HMW Training
               <ArrowRight className="w-5 h-5 ml-2" />
             </button>
           </div>
