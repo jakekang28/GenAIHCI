@@ -58,8 +58,31 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
   private roomStages = new Map<string, RoomStage>();
   private roomContributions = new Map<string, Map<string, Contribution>>();
   private hostDecisions = new Map<string, HostDecision[]>();
-  private roomReady = new Map<string, Map<string, Set<string>>>(); 
+  private roomReady = new Map<string, Map<string, Set<string>>>();
+  
+  private votingLocks = new Map<string, Promise<any>>(); 
   constructor(private readonly db: DbService) {}
+
+  private async withRoomLock<T>(roomId: string, operation: () => Promise<T>): Promise<T> {
+    const lockKey = `voting_${roomId}`;
+    
+    // Wait for any existing lock to complete
+    const existingLock = this.votingLocks.get(lockKey);
+    if (existingLock) {
+      await existingLock.catch(() => {}); // Ignore errors from previous operations
+    }
+    
+    // Create new lock
+    const lockPromise = operation().finally(() => {
+      // Clean up lock when done
+      if (this.votingLocks.get(lockKey) === lockPromise) {
+        this.votingLocks.delete(lockKey);
+      }
+    });
+    
+    this.votingLocks.set(lockKey, lockPromise);
+    return lockPromise;
+  }
 
   handleConnection(socket: Socket) {
     this.logger.log(`Socket connected: ${socket.id}`);
@@ -796,73 +819,72 @@ async handleRoomResetType(
 
       this.logger.log(`Member found: ${member.userName} (${member.userId})`);
 
-      // Get current voting state from session state
-      const states = await this.db.getSessionState(roomId, `voting_${type}`);
-    let votingState: any = states?.[0]?.value;
-    if (!votingState) votingState = {};
-    if (typeof votingState === 'string') {
-      try { votingState = JSON.parse(votingState); } catch { votingState = {}; }
-    }
+      // Room Lock to prevent concurrent votes
+      await this.withRoomLock(roomId, async () => {
+        const states = await this.db.getSessionState(roomId, `voting_${type}`);
+        let votingState: any = states?.[0]?.value;
+        if (!votingState) votingState = {};
+        if (typeof votingState === 'string') {
+          try { votingState = JSON.parse(votingState); } catch { votingState = {}; }
+        }
 
-    // 안전 초기화
-    if (typeof votingState !== 'object') votingState = {};
-    if (typeof votingState.maxSelections !== 'number' || votingState.maxSelections < 1) {
-      votingState.maxSelections = await this.resolveMaxSelections(roomId, type);
-    }
-    if (!votingState.votesByUser || typeof votingState.votesByUser !== 'object') {
-      votingState.votesByUser = {};
-    }
+        if (typeof votingState !== 'object') votingState = {};
+        if (typeof votingState.maxSelections !== 'number' || votingState.maxSelections < 1) {
+          votingState.maxSelections = await this.resolveMaxSelections(roomId, type);
+        }
+        if (!votingState.votesByUser || typeof votingState.votesByUser !== 'object') {
+          votingState.votesByUser = {};
+        }
 
-    const maxSelections: number = votingState.maxSelections;
-    const votesByUser: Record<string, string[]> = votingState.votesByUser;
+        const maxSelections: number = votingState.maxSelections;
+        const votesByUser: Record<string, string[]> = votingState.votesByUser;
 
-    // Validate that user submitted exactly the required number of votes
-    if (optionIds.length !== maxSelections) {
-      this.logger.error(`User ${member.userName} submitted ${optionIds.length} votes but ${maxSelections} are required`);
-      socket.emit('room:error', { 
-        message: `You must select exactly ${maxSelections} option${maxSelections !== 1 ? 's' : ''} to vote` 
+        if (optionIds.length !== maxSelections) {
+          this.logger.error(`User ${member.userName} submitted ${optionIds.length} votes but ${maxSelections} are required`);
+          socket.emit('room:error', { 
+            message: `You must select exactly ${maxSelections} option${maxSelections !== 1 ? 's' : ''} to vote` 
+          });
+          return;
+        }
+
+        votesByUser[member.userId] = optionIds;
+
+        
+        votingState.votesByUser = votesByUser;
+        await this.db.setSessionState(roomId, `voting_${type}`, votingState);
+
+        
+        const uniqueMembers = this.getUniqueRoomMembers(roomId);
+        const voteCounts: Record<string, number> = {};
+        Object.values(votesByUser).forEach((arr: string[] = []) => {
+          arr.forEach((optId) => {
+            voteCounts[optId] = (voteCounts[optId] || 0) + 1;
+          });
+        });
+
+        
+        const usersCompleted = uniqueMembers
+          .filter(m => (votesByUser[m.userId]?.length || 0) >= maxSelections).length;
+
+        const progressPayload = {
+          roomId,
+          type,
+          totalVotes: usersCompleted,         
+          totalMembers: uniqueMembers.length, 
+          isComplete: usersCompleted >= uniqueMembers.length,
+          votes: voteCounts
+        };
+        this.server.to(roomId).emit('room:vote_progress', progressPayload);
+
+        
+        if (progressPayload.isComplete) {
+          await this.handleVotingCompleteEphemeral(roomId, type, votingState);
+        }
       });
-      return;
+    } catch (error) {
+      this.logger.error('Error submitting vote:', error);
+      socket.emit('room:error', { message: 'Failed to submit vote' });
     }
-
-    // Store the user's votes (replace any previous votes)
-    votesByUser[member.userId] = optionIds;
-
-    
-    votingState.votesByUser = votesByUser;
-    await this.db.setSessionState(roomId, `voting_${type}`, votingState);
-
-    
-    const uniqueMembers = this.getUniqueRoomMembers(roomId);
-    const voteCounts: Record<string, number> = {};
-    Object.values(votesByUser).forEach((arr: string[] = []) => {
-      arr.forEach((optId) => {
-        voteCounts[optId] = (voteCounts[optId] || 0) + 1;
-      });
-    });
-
-    
-    const usersCompleted = uniqueMembers
-      .filter(m => (votesByUser[m.userId]?.length || 0) >= maxSelections).length;
-
-    const progressPayload = {
-      roomId,
-      type,
-      totalVotes: usersCompleted,         
-      totalMembers: uniqueMembers.length, 
-      isComplete: usersCompleted >= uniqueMembers.length,
-      votes: voteCounts
-    };
-    this.server.to(roomId).emit('room:vote_progress', progressPayload);
-
-    
-    if (progressPayload.isComplete) {
-      await this.handleVotingCompleteEphemeral(roomId, type, votingState);
-    }
-  } catch (error) {
-    this.logger.error('Error submitting vote:', error);
-    socket.emit('room:error', { message: 'Failed to submit vote' });
-  }
   }
 
   /** Handle Long-term voting completion */
