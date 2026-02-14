@@ -21,24 +21,8 @@ type RoomMember = {
   isActive: boolean;
 };
 
-type RoomStage =
-  | 'home'
-  | 'scenario_selection'
-  | 'interview_question_create'
-  | 'interview_question_voting'
-  | 'interview_run'
-  | 'pov_setup'
-  | 'pov_create'
-  | 'pov_voting'
-  | 'hmw_create'
-  | 'hmw_voting'
-  | 'review';
-type FlowState = {
-  step: RoomStage;   
-  payload?: any;     
-  updatedAt: string; 
-  updatedBy: string; 
-};
+type RoomStage = 'setup' | 'contributions' | 'selection' | 'evaluation' | 'completed';
+
 type Contribution = { 
   id?: string;
   socketId: string; 
@@ -86,25 +70,6 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
     if (!byCp.has(checkpoint)) byCp.set(checkpoint, new Set());
     return byCp.get(checkpoint)!;
   }
-  private normalizeStage(s: any): RoomStage {
-  // 과거 DB에 남아있을 수 있는 legacy 값 보정
-  if (s === 'setup') return 'home';
-
-  const allowed: RoomStage[] = [
-    'home',
-    'scenario_selection',
-    'interview_question_create',
-    'interview_question_voting',
-    'interview_run',
-    'pov_setup',
-    'pov_create',
-    'pov_voting',
-    'hmw_create',
-    'hmw_voting',
-    'review',
-  ];
-  return allowed.includes(s) ? s as RoomStage : 'home';
-}
   private broadcastReady(roomId: string, checkpoint: string) {
     const set = Array.from(this.getReadySet(roomId, checkpoint));
     this.server.to(roomId).emit('room:ready_progress', {
@@ -160,7 +125,7 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
     });
   }
   private getRoomStage(roomId: string): RoomStage {
-    return this.roomStages.get(roomId) ?? 'home';
+    return this.roomStages.get(roomId) ?? 'setup';
   }
   
   private getRoomContributions(roomId: string, type?: string): Contribution[] {
@@ -259,7 +224,6 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
     try {
       // Take session details from DB
       const session = await this.db.getSession(roomId);
-      this.logger.log(`[JOIN] room=${roomId} user=${userId} -> db.current_stage=${session.current_stage}`);
       const isParticipant = session.participants.some(p => p.user_id === userId && p.is_active);
       
       if (!isParticipant) {
@@ -272,19 +236,9 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
       // Initialize Room State (if needed)
       if (!this.rooms.has(roomId)) {
         this.rooms.set(roomId, new Map());
-
-        const current = (session.current_stage as RoomStage) || 'home';
-        this.roomStages.set(roomId, current);
-        this.logger.log(`[JOIN] INIT roomStages[${roomId}] set to ${current}`);
+        this.roomStages.set(roomId, 'setup');
         this.roomContributions.set(roomId, new Map());
-      } else {
-        if (!this.roomStages.has(roomId)) {
-          const current = (session.current_stage as RoomStage) || 'home';
-          this.roomStages.set(roomId, current);
-          this.logger.log(`[JOIN] REPAIR roomStages[${roomId}] set to ${current}`);
-        }
       }
-
 
       // Find Participant Details
       const participant = session.participants.find(p => p.user_id === userId);
@@ -318,40 +272,24 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
       // Send current state to joining user
       const members = this.getRoomMembers(roomId);
       const stage = this.getRoomStage(roomId);
-      const normalizedStage = this.normalizeStage(stage);
       const povContribs = this.getRoomContributions(roomId, 'pov_statement');
       const hmwContribs = this.getRoomContributions(roomId, 'hmw_question');
       const iqContribs  = this.getRoomContributions(roomId, 'interview_question');
-      socket.emit('room:members', { members });
-      socket.emit('session:members', { members }); // legacy
-      socket.emit('room:stage', { stage });
-      socket.emit('session:stage', { stage }); // legacy
+      socket.emit('room:members', { members }); //new event
+      socket.emit('session:members', { members }); // Legacy
+      socket.emit('room:stage', { stage }); //new event
+      socket.emit('session:stage', { stage }); // Legacy
       socket.emit('room:contributions', { roomId, type: 'pov_statement', contributions: povContribs });
       socket.emit('room:contributions', { roomId, type: 'hmw_question', contributions: hmwContribs });
       socket.emit('room:contributions', { roomId, type: 'interview_question', contributions: iqContribs });
-
-     const flow = await this.getFlowState(roomId);
-if (flow) {
-  this.logger.log(`flow : ${flow}`)
-  socket.emit('room:flow', flow);
-} else {
-  const step = this.normalizeStage(session.current_stage);
-  const synthesized = {
-    step,
-    payload: null,
-    updatedAt: new Date().toISOString(),
-    updatedBy: 'system'
-  } as FlowState;
-
-  // 1) 최소한 emit은 즉시 (재접속 멤버가 바로 진행화면으로)
-  socket.emit('room:flow', synthesized);
-
-  // 2) 원하면 DB에도 저장해 두면 다음 재접속 때부터는 “NO flow”가 안 뜸
-  await this.db.setSessionState(roomId, 'flow', synthesized);
-  this.roomStages.set(roomId, step);
-}
       
-      // 6) Broadcast to room
+      // Send existing host decisions to joining user
+      const hostDecisions = this.hostDecisions.get(roomId) || [];
+      for (const decision of hostDecisions) {
+        socket.emit('room:host_decision', { decision });
+      }
+
+      // Broadcast Member Update to Room
       this.broadcastRoomMembers(roomId);
       
       this.logger.log(`User ${userId} joined room ${roomId}`);
@@ -360,13 +298,7 @@ if (flow) {
       socket.emit('room:error', { message: 'Failed to join room' });
     }
   }
-  @SubscribeMessage('room:flow:sync')
-async handleFlowSync(@MessageBody() body: { roomId: string }, @ConnectedSocket() socket: Socket) {
-  const { roomId } = body || {};
-  if (!roomId) return;
-  const flow = await this.getFlowState(roomId);
-  if (flow) socket.emit('room:flow', flow);
-}
+
   @SubscribeMessage('room:leave')
   handleLeaveRoom(
     @MessageBody() body: { roomId: string },
@@ -388,56 +320,36 @@ async handleFlowSync(@MessageBody() body: { roomId: string }, @ConnectedSocket()
   }
 
   private removeSocketFromRoom(socket: Socket, roomId: string) {
-  const room = this.rooms.get(roomId);
+    const room = this.rooms.get(roomId);
+    if (room?.has(socket.id)) {
+      room.delete(socket.id);
+      if (room.size === 0) {
+        // Clean up Empty Room State
+        this.rooms.delete(roomId);
+        this.roomStages.delete(roomId);
+        this.roomContributions.delete(roomId);
+        this.hostDecisions.delete(roomId);
+      }
+    }
 
-  // ✅ (중요) 삭제 전에 캡처
-  const leavingMember = room?.get(socket.id);
+    // Clean up Contributions from this socket
+    const contributions = this.roomContributions.get(roomId);
+    if (contributions?.has(socket.id)) {
+      contributions.delete(socket.id);
+      if (contributions.size === 0) {
+        this.roomContributions.delete(roomId);
+      }
+    }
 
-  if (room?.has(socket.id)) {
-    room.delete(socket.id);
+    socket.leave(roomId);
+    this.socketIndex.delete(socket.id);
 
-    if (room.size === 0) {
-      // Clean up Empty Room State
-      this.rooms.delete(roomId);
-      this.roomStages.delete(roomId);
-      this.roomContributions.delete(roomId);
-      this.hostDecisions.delete(roomId);
+    // Broadcast Updates if Room Still has Members
+    if (room && room.size > 0) {
+      this.broadcastRoomMembers(roomId);
+      this.broadcastContributions(roomId);
     }
   }
-
-  // ✅ contributions cleanup (기존 코드 유지)
-  const contributions = this.roomContributions.get(roomId);
-  if (contributions?.has(socket.id)) {
-    contributions.delete(socket.id);
-    if (contributions.size === 0) this.roomContributions.delete(roomId);
-  }
-
-  socket.leave(roomId);
-  this.socketIndex.delete(socket.id);
-
-  // ✅ (핵심) 이 사용자의 "마지막 소켓"이 끊어진 경우에만 DB 비활성화
-  if (leavingMember) {
-    const stillConnectedForUser = Array
-      .from(this.rooms.get(roomId)?.values() ?? [])
-      .some(m => m.userId === leavingMember.userId);
-
-    // 로그로 꼭 확인해보세요
-    this.logger.log(`[DISCONNECT] user=${leavingMember.userId} stillConnected=${stillConnectedForUser}`);
-
-    if (!stillConnectedForUser) {
-      this.db.leaveSession(roomId, leavingMember.userId)
-        .then(() => this.logger.log(`[DB] set is_active=false for user=${leavingMember.userId} in room=${roomId}`))
-        .catch(e => this.logger.error('[DB] leaveSession failed', e));
-    }
-  }
-
-  // Broadcast Updates if Room Still has Members
-  if (this.rooms.has(roomId) && (this.rooms.get(roomId)!.size > 0)) {
-    this.broadcastRoomMembers(roomId);
-    this.broadcastContributions(roomId);
-  }
-}
-
 
   /** Submit contribution (question, POV statement, HMW question) */
   @SubscribeMessage('room:contribution:submit')
@@ -520,73 +432,7 @@ async handleContributionSubmit(
     socket.emit('room:error', { message: 'Failed to submit contribution' });
   }
 }
-@SubscribeMessage('room:flow:update')
-async handleFlowUpdate(
-  @MessageBody() body: { roomId: string; step: RoomStage; payload?: any },
-  @ConnectedSocket() socket: Socket
-) {
-  const { roomId, step, payload } = body || {};
-  if (!roomId || !step) {
-    socket.emit('room:error', { message: 'roomId and step are required' });
-    return;
-  }
-  const member = this.rooms.get(roomId)?.get(socket.id);
-  if (!member) {
-    socket.emit('room:error', { message: 'You are not a member of this room' });
-    return;
-  }
-  await this.setFlowState(roomId, member.userId, { step, payload });
-}
 
-// helper
-private async setFlowState(
-  roomId: string,
-  actorUserId: string,
-  next: { step: RoomStage; payload?: any }
-) {
-  const flow: FlowState = {
-    step: next.step,
-    payload: next.payload ?? null,
-    updatedAt: new Date().toISOString(),
-    updatedBy: actorUserId,
-  };
-  await Promise.all([
-    this.db.setSessionState(roomId, 'flow', flow),
-    this.db.updateSessionStatus(roomId, 'active', flow.step), 
-  ]);
-
-  this.roomStages.set(roomId, flow.step);
-  this.server.to(roomId).emit('room:flow', flow);
-}
-private async getFlowState(roomId: string): Promise<FlowState | null> {
-  try {
-    const rows = await this.db.getSessionState(roomId, 'flow');
-    if (!rows || rows.length === 0) return null;
-
-    let flow = rows[0]?.value as any;
-    if (typeof flow === 'string') {
-      try {
-        flow = JSON.parse(flow);
-      } catch {
-        // 파싱 실패 시 null 반환
-        return null;
-      }
-    }
-
-    if (!flow || typeof flow !== 'object') return null;
-
-    // 최소 필드 보정(누락 시 기본값)
-    if (!flow.step) flow.step = 'home';
-    if (!flow.updatedAt) flow.updatedAt = new Date().toISOString();
-    if (!flow.updatedBy) flow.updatedBy = 'system';
-    if (flow.payload === undefined) flow.payload = null;
-
-    return flow as FlowState;
-  } catch (e) {
-    this.logger.error(`[getFlowState] failed for room ${roomId}:`, e);
-    return null;
-  }
-}
   /** Handle final team selections after voting */
   @SubscribeMessage('room:final_selection')
   async handleFinalSelection(
@@ -648,66 +494,55 @@ private async getFlowState(roomId: string): Promise<FlowState | null> {
 
   /** Host decision: Change room stage */
   @SubscribeMessage('room:host:change_stage')
-async handleHostChangeStage(
-  @MessageBody() body: { roomId: string; newStage: RoomStage },
-  @ConnectedSocket() socket: Socket,
-) {
-  const { roomId, newStage } = body || {};
-  if (!roomId || !newStage) {
-    socket.emit('room:error', { message: 'Room ID and new stage are required' });
-    return;
-  }
-
-  const member = this.rooms.get(roomId)?.get(socket.id);
-  
-  this.logger.log(`[STAGE] change request room=${roomId} newStage=${newStage} by=${member?.userId}`);
-  if (!member || !member.isHost) {
-    socket.emit('room:error', { message: 'Only the host can change room stage' });
-    return;
-  }
-
-  try {
-    // 메모리 단계 업데이트
-    this.roomStages.set(roomId, newStage);
-
-    // 플로우 상태 저장(복원용)
-    await this.setFlowState(roomId, member.userId, { step: newStage });
-    this.logger.log(`[STAGE] change applied via setFlowState -> ${newStage}`);
-    // 호스트 결정 히스토리
-    const decision: HostDecision = {
-      type: 'change_stage',
-      data: { newStage },
-      decidedBy: member.userId,
-      timestamp: new Date().toISOString()
-    };
-
-    // 브로드캐스트
-    this.broadcastRoomStage(roomId);
-    this.broadcastHostDecision(roomId, decision);
-
-    const stagesNeedingContribs = new Set<RoomStage>([
-      'interview_question_create',
-      'interview_question_voting',
-      'pov_create',
-      'pov_voting',
-      'hmw_create',
-      'hmw_voting',
-    ]);
-
-    if (stagesNeedingContribs.has(newStage)) {
-      if (!this.roomContributions.has(roomId)) {
-        this.roomContributions.set(roomId, new Map());
-      }
-      this.broadcastContributions(roomId); // 타입별로 쏘고 싶으면 두 번째 인자에 type 넣어도 됨
+  async handleHostChangeStage(
+    @MessageBody() body: { roomId: string; newStage: RoomStage },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    const { roomId, newStage } = body || {};
+    if (!roomId || !newStage) {
+      socket.emit('room:error', { message: 'Room ID and new stage are required' });
+      return;
     }
 
-    this.logger.log(`Host ${member.userName} changed room ${roomId} stage to ${newStage}`);
-  } catch (error) {
-    this.logger.error('Error changing room stage:', error);
-    socket.emit('room:error', { message: 'Failed to change room stage' });
-  }
-}
+    const member = this.rooms.get(roomId)?.get(socket.id);
+    if (!member || !member.isHost) {
+      socket.emit('room:error', { message: 'Only the host can change room stage' });
+      return;
+    }
 
+    try {
+      // Update stage in memory
+      this.roomStages.set(roomId, newStage);
+      
+      // Update in database
+      await this.db.updateSessionStatus(roomId, 'active', newStage);
+
+      // Create host decision record
+      const decision: HostDecision = {
+        type: 'change_stage',
+        data: { newStage },
+        decidedBy: member.userId,
+        timestamp: new Date().toISOString()
+      };
+
+      // Broadcast stage change
+      this.broadcastRoomStage(roomId);
+      this.broadcastHostDecision(roomId, decision);
+      
+      // Initialize contributions if moving to contributions stage
+      if (newStage === 'contributions') {
+        if (!this.roomContributions.has(roomId)) {
+          this.roomContributions.set(roomId, new Map());
+        }
+        this.broadcastContributions(roomId);
+      }
+      
+      this.logger.log(`Host ${member.userName} changed room ${roomId} stage to ${newStage}`);
+    } catch (error) {
+      this.logger.error('Error changing room stage:', error);
+      socket.emit('room:error', { message: 'Failed to change room stage' });
+    }
+  }
   @SubscribeMessage('room:ready:confirm')
 handleReadyConfirm(
   @MessageBody() body: { roomId: string; checkpoint?: string; userId?: string },
@@ -1154,49 +989,45 @@ async handleRoomResetType(
 
   /** Reset room state */
   @SubscribeMessage('room:reset')
-async handleRoomReset(
-  @MessageBody() body: { roomId: string; clearContributions?: boolean },
-  @ConnectedSocket() socket: Socket,
-) {
-  const { roomId, clearContributions } = body || {};
-  if (!roomId) return;
+  async handleRoomReset(
+    @MessageBody() body: { roomId: string; clearContributions?: boolean },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    const { roomId, clearContributions } = body || {};
+    if (!roomId) return;
 
-  const member = this.rooms.get(roomId)?.get(socket.id);
-  if (!member || !member.isHost) {
-    socket.emit('room:error', { message: 'Only the host can reset the room' });
-    return;
-  }
-
-  try {
-    // 1) 메모리 스테이지 초기화
-    this.roomStages.set(roomId, 'home');
-
-    // 2) 컨트리뷰션 비우기(옵션)
-    if (clearContributions) {
-      this.roomContributions.delete(roomId);
+    const member = this.rooms.get(roomId)?.get(socket.id);
+    if (!member || !member.isHost) {
+      socket.emit('room:error', { message: 'Only the host can reset the room' });
+      return;
     }
 
-    // 3) 호스트 결정 로그 초기화
-    this.hostDecisions.delete(roomId);
+    try {
+      // Reset stage
+      this.roomStages.set(roomId, 'setup');
+      
+      // Clear contributions if requested
+      if (clearContributions) {
+        this.roomContributions.delete(roomId);
+      }
+      
+      // Clear host decisions
+      this.hostDecisions.delete(roomId);
 
-    // 4) DB current_stage 초기화
-    await this.db.updateSessionStatus(roomId, 'active', 'home');
+      // Update database
+      await this.db.updateSessionStatus(roomId, 'active', 'setup');
 
-    // 5) 🔄 FlowState 초기화(+ 클라이언트에 room:flow 브로드캐스트)
-    await this.setFlowState(roomId, member.userId, { step: 'home', payload: null });
-
-    // 6) 브로드캐스트(스테이지/멤버/컨트리뷰션)
-    this.broadcastRoomStage(roomId);
-    this.broadcastRoomMembers(roomId);
-    this.broadcastContributions(roomId);
-
-    this.logger.log(`Host ${member.userName} reset room ${roomId}`);
-  } catch (error) {
-    this.logger.error('Error resetting room:', error);
-    socket.emit('room:error', { message: 'Failed to reset room' });
+      // Broadcast updates
+      this.broadcastRoomStage(roomId);
+      this.broadcastRoomMembers(roomId);
+      this.broadcastContributions(roomId);
+      
+      this.logger.log(`Host ${member.userName} reset room ${roomId}`);
+    } catch (error) {
+      this.logger.error('Error resetting room:', error);
+      socket.emit('room:error', { message: 'Failed to reset room' });
+    }
   }
-}
-
 
   // ============================================================================
   // LEGACY SUPPORT (for backward compatibility)
@@ -1238,7 +1069,7 @@ async handleRoomReset(
   ) {
     // Redirect to new stage change system
     this.handleHostChangeStage(
-      { roomId: body.sessionId, newStage: 'interview_question_voting' },
+      { roomId: body.sessionId, newStage: 'contributions' },
       socket
     );
   }

@@ -181,80 +181,63 @@ export class DbService {
   }
 
   /** Join a session by code */
-  async joinSessionByCode(sessionCode: string, userId: string, displayName: string): Promise<SessionRow> {
-  const { data: session, error: sessionError } = await this.client
-    .from('sessions')
-    .select('*')
-    .eq('code', sessionCode.toUpperCase())
-    .eq('status', 'active')
-    .single();
-  if (sessionError || !session) throw new Error('Session not found or not accepting participants');
-
-  // 기존 참가자?
-  const { data: existing } = await this.client
-    .from('session_participants')
-    .select('*')
-    .eq('session_id', session.id)
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (existing) {
-    // 👉 기존 참가자는 정원체크 없이 재활성화
-    const { error: reactivateErr } = await this.client
+  async joinSessionByCode(
+    sessionCode: string, 
+    userId: string, 
+    displayName: string
+  ): Promise<SessionRow> {
+    // Find session by code
+    const { data: session, error: sessionError } = await this.client
+      .from('sessions')
+      .select('*')
+      .eq('code', sessionCode.toUpperCase())
+      .eq('status', 'active') // Only allow joining active sessions
+      .single();
+    
+    if (sessionError || !session) {
+      throw new Error('Session not found or not accepting participants');
+    }
+    
+    // Check participant count
+    const { count } = await this.client
       .from('session_participants')
-      .update({
-        is_active: true,
-        display_name: displayName,
-        last_seen_at: new Date().toISOString(),
-      })
+      .select('*', { count: 'exact', head: true })
       .eq('session_id', session.id)
-      .eq('user_id', userId);
-    if (reactivateErr) throw reactivateErr;
+      .eq('is_active', true);
+    
+    if (count && count >= session.max_participants) {
+      throw new Error('Session is full');
+    }
+    
+    // Else, add participant
+    await this.joinSession(session.id, userId, displayName, false);
+    
     return session as SessionRow;
   }
 
-  // 신규 참가자만 정원 체크
-  const { count } = await this.client
-    .from('session_participants')
-    .select('*', { count: 'exact', head: true })
-    .eq('session_id', session.id)
-    .eq('is_active', true);
-
-  if (count && count >= session.max_participants) throw new Error('Session is full');
-
-  await this.joinSession(session.id, userId, displayName, false);
-  return session as SessionRow;
-}
-
-
   /** Add participant to session */
   async joinSession(
-  sessionId: string, 
-  userId: string, 
-  displayName: string, 
-  isHost: boolean = false
-): Promise<void> {
-  const now = new Date().toISOString();
-  const { error } = await this.client
-    .from('session_participants')
-    .upsert(
-      { 
+    sessionId: string, 
+    userId: string, 
+    displayName: string, 
+    isHost: boolean = false
+  ): Promise<void> {
+    const { error } = await this.client
+      .from('session_participants')
+      .upsert({ 
         session_id: sessionId, 
         user_id: userId, 
         display_name: displayName,
         is_host: isHost,
         is_active: true,
-        last_seen_at: now,
-        joined_at: now, // 새로 들어올 땐 joined_at도 채워둠(이미 있으면 무시됨)
-      },
-      { onConflict: 'session_id,user_id' } // 🔑 충돌 키 명시 (Supabase v2)
-    );
-
-  if (error) {
-    this.logger.error('joinSession error', error);
-    throw error;
+        last_seen_at: new Date().toISOString()
+      });
+    
+    if (error) {
+      this.logger.error('joinSession error', error);
+      throw error;
+    }
   }
-}
 
   /** Get session with participants */
   async getSession(sessionId: string): Promise<SessionRow & { participants: SessionParticipantRow[] }> {
@@ -375,54 +358,7 @@ export class DbService {
       throw error;
     }
   }
-  async leaveSession(sessionId: string, userId: string): Promise<void> {
-  const { error } = await this.client
-    .from('session_participants')
-    .update({
-      is_active: false,
-      last_seen_at: new Date().toISOString(),
-    })
-    .eq('session_id', sessionId)
-    .eq('user_id', userId);
 
-  if (error) {
-    this.logger.error('leaveSession error', error);
-    throw error;
-  }
-}
-
-/** is_active 토글(필요 시 일반화해 쓰기) */
-async setParticipantActive(sessionId: string, userId: string, isActive: boolean): Promise<void> {
-  const { error } = await this.client
-    .from('session_participants')
-    .update({
-      is_active: isActive,
-      last_seen_at: new Date().toISOString(),
-    })
-    .eq('session_id', sessionId)
-    .eq('user_id', userId);
-
-  if (error) {
-    this.logger.error('setParticipantActive error', error);
-    throw error;
-  }
-}
-
-/** 현재 활성 참가자 수 조회 */
-async getActiveParticipantCount(sessionId: string): Promise<number> {
-  const { count, error } = await this.client
-    .from('session_participants')
-    .select('*', { count: 'exact', head: true })
-    .eq('session_id', sessionId)
-    .eq('is_active', true);
-
-  if (error) {
-    this.logger.error('getActiveParticipantCount error', error);
-    throw error;
-  }
-
-  return count ?? 0;
-}
   // ============================================================================
   // CONTRIBUTION MANAGEMENT
   // ============================================================================
